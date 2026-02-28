@@ -1,0 +1,375 @@
+:root,
+html.dark-theme {
+    /* Dark Theme (Default) */
+    --bg-color: #1E222A;
+    --surface-color: #282E38;
+    --primary-color: #20A090;
+    --text-color: #E8ECEF;
+    --button-bg: #282E38;
+    --button-hover: #363D49;
+    --button-active: #20A090;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-active: 0 2px 4px rgba(0, 0, 0, 0.2);
+    --header-bg: rgba(30, 34, 42, 0.85);
+    --slider-bg: #4A5568;
+    --border-color: rgba(255, 255, 255, 0.05);
+}
+
+html.light-theme {
+    /* Light Theme */
+    --bg-color: #F0F4F8;
+    --surface-color: #FFFFFF;
+    --primary-color: #1D8A78;
+    --text-color: #1E293B;
+    --button-bg: #FFFFFF;
+    --button-hover: #E2E8F0;
+    --button-active: #1D8A78;
+    --shadow: 0 4px 12px rgba(30, 41, 59, 0.08);
+    --shadow-active: 0 2px 4px rgba(30, 41, 59, 0.15);
+    --header-bg: rgba(255, 255, 255, 0.85);
+    --slider-bg: #CBD5E1;
+    --border-color: rgba(30, 41, 59, 0.1);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    background-color: var(--bg-color);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow-x: hidden;
+    user-select: none;
+    /* Prevent text selection on quick taps */
+    -webkit-tap-highlight-color: transparent;
+    /* Remove default tap highlight on iOS */
+}
+
+/* Header & Volume Slider */
+.top-bar {
+    position: sticky;
+    top: 0;
+    background-color: var(--header-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: var(--shadow);
+    z-index: 10;
+}
+
+.top-bar h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--text-color);
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    width: 100%;
+    max-width: 400px;
+}
+
+.volume-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+#volume-slider {
+    flex-grow: 1;
+    cursor: pointer;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--slider-bg);
+    border-radius: 3px;
+    outline: none;
+}
+
+#volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(11, 43, 16, 0.4);
+    transition: transform 0.1s;
+}
+
+#volume-slider::-webkit-slider-thumb:active {
+    transform: scale(1.1);
+}
+
+.action-btn {
+    background-color: var(--primary-color);
+    color: var(--bg-color);
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: var(--shadow-active);
+    transition: transform 0.1s, opacity 0.2s, background-color 0.2s;
+    white-space: nowrap;
+}
+
+.action-btn:active {
+    transform: scale(0.95);
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.action-btn--stop {
+    background-color: #F43F5E;
+    color: white;
+}
+
+/* Soundboard Grid */
+.soundboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    padding: 1.5rem;
+    flex-grow: 1;
+    align-content: start;
+}
+
+/* 3 columns on larger phones / small tablets */
+@media (min-width: 480px) {
+    .soundboard-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        padding: 2rem;
+    }
+}
+
+/* 4 columns on tablets and up */
+@media (min-width: 768px) {
+    .soundboard-grid {
+        grid-template-columns: repeat(4, 1fr);
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+}
+
+/* Buttons */
+.sound-btn {
+    background-color: var(--button-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.1s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    word-break: break-word;
+    min-height: 100px;
+    touch-action: manipulation;
+}
+
+/* Hover state is mostly for desktop */
+@media (hover: hover) {
+    .sound-btn:hover {
+        background-color: var(--button-hover);
+        transform: translateY(-2px);
+    }
+}
+
+/* Visual feedback on press - active class handled by JS for better mobile behavior */
+.sound-btn:active,
+.sound-btn.active {
+    background-color: var(--button-active);
+    transform: translateY(4px);
+    box-shadow: var(--shadow-active);
+    color: var(--text-color);
+}
+
+/* Continuous playing state */
+.sound-btn.playing {
+    background-color: var(--primary-color);
+    color: var(--bg-color);
+    box-shadow: 0 0 15px var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* Floating Action Button */
+.fab-wrapper {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 16px;
+    z-index: 100;
+}
+
+.fab-main {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    color: var(--bg-color);
+    border: none;
+    box-shadow: var(--shadow-active);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s;
+}
+
+.fab-main:hover {
+    transform: scale(1.05);
+    filter: brightness(0.9);
+}
+
+.fab-main:active {
+    transform: scale(0.95);
+}
+
+.fab-main svg {
+    transition: transform 0.3s ease;
+}
+
+.fab-wrapper.open .fab-main svg#fab-icon-music {
+    display: none;
+}
+
+.fab-wrapper.open .fab-main svg#fab-icon-close {
+    display: block;
+    transform: rotate(90deg);
+}
+
+/* Base state for proper toggle */
+.fab-main svg#fab-icon-close {
+    display: none;
+    transform: rotate(-90deg);
+}
+
+.fab-wrapper.open .fab-main svg#fab-icon-close {
+    display: block;
+    transform: rotate(0deg);
+}
+
+.fab-wrapper:not(.open) .fab-main svg#fab-icon-music {
+    display: block;
+    transform: rotate(0deg);
+}
+
+.fab-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+    pointer-events: none;
+}
+
+.fab-wrapper.open .fab-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.fab-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: var(--button-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    /* Pill shape */
+    padding: 12px 20px 12px 16px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s ease;
+    /* Adjust origin for scale effect */
+    transform-origin: right center;
+}
+
+.fab-item:hover {
+    background-color: var(--button-hover);
+    transform: scale(1.03);
+}
+
+.fab-item:active {
+    transform: scale(0.97);
+}
+
+/* Staggered animation indices for items */
+.fab-item {
+    opacity: 0;
+    transform: translateX(20px);
+    transition: all 0.3s ease;
+}
+
+.fab-wrapper.open .fab-item {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.fab-wrapper.open .fab-item:nth-child(1) {
+    transition-delay: 0.05s;
+}
+
+.fab-wrapper.open .fab-item:nth-child(2) {
+    transition-delay: 0.1s;
+}
+
+.fab-wrapper.open .fab-item:nth-child(3) {
+    transition-delay: 0.15s;
+}
+
+/* In delete mode, style the grid items */
+.soundboard-grid.delete-mode .sound-btn {
+    border: 2px solid #F43F5E;
+    animation: shake 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes shake {
+    0% {
+        transform: rotate(-1deg);
+    }
+
+    100% {
+        transform: rotate(1deg);
+    }
+}
