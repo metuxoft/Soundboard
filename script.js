@@ -13,7 +13,6 @@ const volumeSlider = document.getElementById('volume-slider');
 const fadeOutBtn = document.getElementById('fade-out-btn');
 const stopBtn = document.getElementById('stop-btn');
 
-let activeAudios = [];
 let currentVolume = parseFloat(volumeSlider.value);
 
 let fadeInterval = null;
@@ -140,21 +139,6 @@ function saveCustomSound(soundData) {
     });
 }
 
-function deleteCustomSound(id) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['sounds'], 'readwrite');
-        const store = transaction.objectStore('sounds');
-        const request = store.delete(id);
-
-        request.onsuccess = () => {
-            customSounds = customSounds.filter(s => s.id !== id);
-            renderButtons();
-            resolve();
-        };
-        request.onerror = (e) => reject(e.target.error);
-    });
-}
-
 // ==========================================
 // FAB Logic
 // ==========================================
@@ -200,15 +184,16 @@ async function verifyPermission(fileHandle, readWrite) {
     if (readWrite) {
         options.mode = 'readwrite';
     }
-    // Check if permission was already granted
-    if ((await fileHandle.queryPermission(options)) === 'granted') {
-        return true;
+    try {
+        if ((await fileHandle.queryPermission(options)) === 'granted') {
+            return true;
+        }
+        if ((await fileHandle.requestPermission(options)) === 'granted') {
+            return true;
+        }
+    } catch (e) {
+        console.warn("Permission check error:", e);
     }
-    // Request permission. If the user grants permission, return true.
-    if ((await fileHandle.requestPermission(options)) === 'granted') {
-        return true;
-    }
-    // The user didn't grant permission
     return false;
 }
 
@@ -249,20 +234,112 @@ if (fabRemoveMedia) {
     });
 }
 
-async function prepareAudioUrl(sound) {
-    if (sound.type === 'default_url') {
-        return sound.fileUrl; // From initial default array
-    }
-    if (sound.custom) {
-        const hasPermission = await verifyPermission(sound.handle, false);
-        if (!hasPermission) return null;
+// ==========================================
+// Web Audio API Engine for Gapless Looping
+// ==========================================
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
 
-        const file = await sound.handle.getFile();
-        return URL.createObjectURL(file);
+function getAudioContext() {
+    if (!audioCtx) {
+        audioCtx = new AudioContextClass();
     }
-    return sound.file; // Fallback
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    return audioCtx;
 }
 
+const bufferCache = new Map(); // soundId -> AudioBuffer
+let activeSessions = []; // Stores active Web Audio playback sessions
+
+async function getSoundArrayBuffer(sound) {
+    try {
+        if (sound.custom && sound.handle) {
+            const hasPermission = await verifyPermission(sound.handle, false);
+            if (!hasPermission) return null;
+            const file = await sound.handle.getFile();
+            return await file.arrayBuffer();
+        }
+
+        const url = sound.fileUrl || sound.file;
+        if (url) {
+            // Encode URI so spaces in paths (e.g. "audio/Play me.wav") work in Chrome fetch
+            const encodedUrl = encodeURI(url);
+            const res = await fetch(encodedUrl);
+            if (!res.ok) {
+                console.error(`Fetch failed (${res.status}) for: ${encodedUrl}`);
+                return null;
+            }
+            return await res.arrayBuffer();
+        }
+    } catch (err) {
+        console.error("Error loading sound array buffer:", err);
+    }
+    return null;
+}
+
+async function loadAudioBuffer(sound) {
+    if (bufferCache.has(sound.id)) {
+        return bufferCache.get(sound.id);
+    }
+    try {
+        const arrayBuffer = await getSoundArrayBuffer(sound);
+        if (!arrayBuffer) return null;
+        const ctx = getAudioContext();
+        
+        // Fail-safe decodeAudioData supporting both Promises and Callbacks
+        const decoded = await new Promise((resolve, reject) => {
+            try {
+                const res = ctx.decodeAudioData(arrayBuffer, resolve, reject);
+                if (res && typeof res.then === 'function') {
+                    res.then(resolve).catch(reject);
+                }
+            } catch (err) {
+                reject(err);
+            }
+        });
+
+        bufferCache.set(sound.id, decoded);
+        return decoded;
+    } catch (e) {
+        console.error("Failed to decode audio buffer for:", sound.name, e);
+        return null;
+    }
+}
+
+function stopAllActiveSessions() {
+    activeSessions.forEach(session => {
+        try {
+            session.sourceNode.stop();
+            session.sourceNode.disconnect();
+            session.gainNode.disconnect();
+        } catch (e) {}
+    });
+    activeSessions = [];
+    document.querySelectorAll('.sound-btn').forEach(b => b.classList.remove('playing'));
+
+    if (progressUpdateInterval) clearInterval(progressUpdateInterval);
+    const progressBar = document.getElementById('progress-bar');
+    if (progressBar) progressBar.style.width = '0%';
+}
+
+function deleteCustomSound(id) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(['sounds'], 'readwrite');
+        const store = transaction.objectStore('sounds');
+        const request = store.delete(id);
+
+        request.onsuccess = () => {
+            bufferCache.delete(id);
+            stopAllActiveSessions();
+            customSounds = customSounds.filter(s => s.id !== id);
+            renderButtons();
+            resolve();
+        };
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
 
 function renderButtons() {
     grid.innerHTML = ''; // Clear just in case
@@ -271,6 +348,9 @@ function renderButtons() {
     const allSounds = customSounds.map(s => ({ ...s, custom: true }));
 
     allSounds.forEach(sound => {
+        // Preload buffer in background
+        loadAudioBuffer(sound).catch(() => {});
+
         const btn = document.createElement('div');
         btn.className = 'sound-btn';
         btn.setAttribute('role', 'button');
@@ -313,16 +393,6 @@ function renderButtons() {
 
         btn.appendChild(menuBtn);
 
-        // We defer Audio creation for custom sounds to handle permissions
-        let audio = null;
-        let objectUrl = null;
-
-        if (!sound.custom) {
-            audio = new Audio(sound.file);
-            audio.preload = 'auto';
-            setupAudioListeners(audio, btn, sound);
-        }
-
         let lastPlayed = 0;
 
         const handleInteraction = async (e) => {
@@ -334,7 +404,13 @@ function renderButtons() {
             // Prevent default behavior to avoid double-firing events
             if (e && e.cancelable) e.preventDefault();
 
-            // Defend against simultaneous fired touchstart + mousedown causing insta-cancel
+            // Direct user gesture: Unlock / resume AudioContext synchronously!
+            const ctx = getAudioContext();
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+
+            // Defend against simultaneous fired touchstart + mousedown
             const now = Date.now();
             if (now - lastPlayed < 100) return;
             lastPlayed = now;
@@ -344,7 +420,6 @@ function renderButtons() {
                 if (sound.custom) {
                     await deleteCustomSound(sound.id);
                 } else {
-                    // Visual shake / reject for predefined sounds
                     btn.style.animation = 'none';
                     void btn.offsetWidth; // trigger reflow
                     btn.style.animation = 'shake 0.4s ease-in-out';
@@ -352,31 +427,17 @@ function renderButtons() {
                 return;
             }
 
-            // Lazy load custom audio when trying to play
-            if (sound.custom && !audio) {
-                const url = await prepareAudioUrl(sound);
-                if (url) {
-                    objectUrl = url;
-                    audio = new Audio(objectUrl);
-                    setupAudioListeners(audio, btn, sound);
-                } else {
-                    console.error("Permission denied to access file.");
-                    return;
-                }
+            // Add active class for visual tactile feedback
+            btn.classList.add('active');
+            setTimeout(() => btn.classList.remove('active'), 150);
+
+            const buffer = await loadAudioBuffer(sound);
+            if (!buffer) {
+                console.error("Audio buffer not available for:", sound.name);
+                return;
             }
 
-            if (!audio) return;
-
-            // Update loop property before playback
-            audio.loop = !!sound.isLooped;
-
-            // Stop previously playing audios instantly
-            activeAudios.forEach(oldAudio => {
-                oldAudio.pause();
-                oldAudio.currentTime = 0;
-            });
-            activeAudios = [];
-            document.querySelectorAll('.sound-btn').forEach(b => b.classList.remove('playing'));
+            stopAllActiveSessions();
 
             // Cancel any ongoing global fades
             if (fadeInterval) {
@@ -389,26 +450,19 @@ function renderButtons() {
                 fadeInInterval = null;
             }
 
-            // Add active class for visual tactile feedback
-            btn.classList.add('active');
-            setTimeout(() => btn.classList.remove('active'), 150);
+            const sourceNode = ctx.createBufferSource();
+            sourceNode.buffer = buffer;
+            sourceNode.loop = !!sound.isLooped;
 
-            // Add playing class
-            btn.classList.add('playing');
-
-            // Reset this specific audio to start
-            audio.currentTime = 0;
-
-            // Check if we need to fade in (current volume is 0 or slider is at 0)
+            const gainNode = ctx.createGain();
             const sliderVolume = parseFloat(volumeSlider.value);
 
             if (sliderVolume === 0 || currentVolume === 0) {
                 currentVolume = 0;
-                audio.volume = 0;
+                gainNode.gain.setValueAtTime(0, ctx.currentTime);
                 volumeSlider.value = 0;
 
-                // Start fade in to 1 (100%)
-                const duration = 3000; // 3 seconds
+                const duration = 3000;
                 const intervalTime = 50;
                 const steps = duration / intervalTime;
                 let currentStep = 0;
@@ -421,8 +475,8 @@ function renderButtons() {
                     currentVolume = newVol;
                     volumeSlider.value = newVol;
 
-                    activeAudios.forEach(a => {
-                        a.volume = newVol;
+                    activeSessions.forEach(s => {
+                        s.gainNode.gain.setValueAtTime(newVol, ctx.currentTime);
                     });
 
                     if (currentStep >= steps) {
@@ -431,31 +485,50 @@ function renderButtons() {
                     }
                 }, intervalTime);
             } else {
-                audio.volume = currentVolume;
+                gainNode.gain.setValueAtTime(currentVolume, ctx.currentTime);
             }
 
-            // Track and play
-            activeAudios.push(audio);
-            audio.play().catch(err => {
-                console.warn("Autoplay blocked or audio format not supported: ", err);
-            });
+            sourceNode.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            const session = {
+                soundId: sound.id,
+                sourceNode: sourceNode,
+                gainNode: gainNode,
+                buffer: buffer,
+                startTime: ctx.currentTime,
+                btn: btn
+            };
+
+            activeSessions.push(session);
+            btn.classList.add('playing');
+
+            sourceNode.onended = () => {
+                if (!sourceNode.loop) {
+                    activeSessions = activeSessions.filter(s => s !== session);
+                    if (activeSessions.length === 0) {
+                        btn.classList.remove('playing');
+                    }
+                }
+            };
+
+            sourceNode.start(0);
 
             // Start updating progress bar exclusively for this audio
             if (progressUpdateInterval) clearInterval(progressUpdateInterval);
             const progressBar = document.getElementById('progress-bar');
 
             progressUpdateInterval = setInterval(() => {
-                if (audio.duration) {
-                    const percent = (audio.currentTime / audio.duration) * 100;
+                if (activeSessions.length > 0) {
+                    const active = activeSessions[activeSessions.length - 1];
+                    const dur = active.buffer.duration;
+                    const elapsed = ctx.currentTime - active.startTime;
+                    const currentProgress = (elapsed % dur) / dur;
+                    const percent = currentProgress * 100;
                     if (progressBar) progressBar.style.width = `${percent}%`;
-                }
-
-                // If audio finished naturally, reset progress bar to 0 unless another audio took over
-                if (audio.ended && !audio.loop) {
-                    if (activeAudios[activeAudios.length - 1] === audio) {
-                        if (progressBar) progressBar.style.width = `0%`;
-                        clearInterval(progressUpdateInterval);
-                    }
+                } else {
+                    if (progressBar) progressBar.style.width = '0%';
+                    clearInterval(progressUpdateInterval);
                 }
             }, 50);
         };
@@ -465,31 +538,10 @@ function renderButtons() {
 
         // Binding for mouse users 
         btn.addEventListener('mousedown', (e) => {
-            // Prevent triggering twice on devices that fire both touchstart and mousedown (like some touch laptops)
             if (e.pointerType !== "touch") handleInteraction(e);
         });
 
         grid.appendChild(btn);
-    });
-}
-
-function setupAudioListeners(audio, btn, sound) {
-    audio.soundId = sound.id;
-    audio.loop = !!sound.isLooped;
-
-    // Cleanup when audio finishes naturally
-    audio.addEventListener('ended', () => {
-        if (!audio.loop) {
-            activeAudios = activeAudios.filter(a => a !== audio);
-            if (activeAudios.length === 0) btn.classList.remove('playing');
-        }
-    });
-
-    // If it errors (e.g., file not found), remove it too
-    audio.addEventListener('error', () => {
-        activeAudios = activeAudios.filter(a => a !== audio);
-        if (activeAudios.length === 0) btn.classList.remove('playing');
-        console.error(`Error loading or playing: ${sound.name}`);
     });
 }
 
@@ -511,9 +563,11 @@ if (volumeIcon) {
 
         volumeSlider.value = currentVolume;
 
-        activeAudios.forEach(audio => {
-            audio.volume = currentVolume;
-        });
+        if (audioCtx) {
+            activeSessions.forEach(s => {
+                s.gainNode.gain.setValueAtTime(currentVolume, audioCtx.currentTime);
+            });
+        }
 
         if (fadeInterval) {
             clearInterval(fadeInterval);
@@ -542,9 +596,11 @@ volumeSlider.addEventListener('input', (e) => {
         fadeInInterval = null;
     }
 
-    activeAudios.forEach(audio => {
-        audio.volume = currentVolume;
-    });
+    if (audioCtx) {
+        activeSessions.forEach(s => {
+            s.gainNode.gain.setValueAtTime(currentVolume, audioCtx.currentTime);
+        });
+    }
 });
 
 // Fade Out Logic
@@ -567,16 +623,17 @@ fadeOutBtn.addEventListener('click', () => {
 
     fadeInterval = setInterval(() => {
         currentStep++;
-        // Calculate new volume linearly
         let newVol = startVolume * (1 - (currentStep / steps));
         if (newVol < 0) newVol = 0;
 
         currentVolume = newVol;
         volumeSlider.value = newVol;
 
-        activeAudios.forEach(audio => {
-            audio.volume = newVol;
-        });
+        if (audioCtx) {
+            activeSessions.forEach(s => {
+                s.gainNode.gain.setValueAtTime(newVol, audioCtx.currentTime);
+            });
+        }
 
         if (currentStep >= steps) {
             clearInterval(fadeInterval);
@@ -599,18 +656,7 @@ stopBtn.addEventListener('click', () => {
         fadeInInterval = null;
     }
 
-    // Stop all currently playing sounds
-    activeAudios.forEach(audio => {
-        audio.pause();
-        audio.currentTime = 0;
-    });
-    activeAudios = [];
-    document.querySelectorAll('.sound-btn').forEach(b => b.classList.remove('playing'));
-
-    // Reset progress bar
-    if (progressUpdateInterval) clearInterval(progressUpdateInterval);
-    const progressBar = document.getElementById('progress-bar');
-    if (progressBar) progressBar.style.width = '0%';
+    stopAllActiveSessions();
 
     // Give a brief visual feedback on the button
     stopBtn.classList.add('active');
@@ -677,10 +723,10 @@ if (sheetOptionLoop) {
             customSounds[idx].isLooped = currentActiveSound.isLooped;
         }
 
-        // Apply updated loop setting to active audios matching this sound
-        activeAudios.forEach(a => {
-            if (a.soundId === currentActiveSound.id) {
-                a.loop = !!currentActiveSound.isLooped;
+        // Apply updated loop setting to active sessions matching this sound
+        activeSessions.forEach(s => {
+            if (s.soundId === currentActiveSound.id) {
+                s.sourceNode.loop = !!currentActiveSound.isLooped;
             }
         });
 
@@ -750,7 +796,7 @@ if ('serviceWorker' in navigator) {
         // Auto-clear old caches to ensure the new "Soundboard" updates apply immediately
         caches.keys().then(names => {
             for (let name of names) {
-                if (name !== 'soundboard-v16') {
+                if (name !== 'soundboard-v19') {
                     caches.delete(name);
                 }
             }
