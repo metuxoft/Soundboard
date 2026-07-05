@@ -58,7 +58,7 @@ if (themeToggleBtn) {
     });
 }
 
-let customSounds = []; // To store { name, data } from IndexedDB
+let customSounds = []; // To store { name, handle } from IndexedDB
 let isDeleteMode = false;
 
 // ==========================================
@@ -195,6 +195,23 @@ function toggleDeleteMode(force) {
     }
 }
 
+async function verifyPermission(fileHandle, readWrite) {
+    const options = {};
+    if (readWrite) {
+        options.mode = 'readwrite';
+    }
+    // Check if permission was already granted
+    if ((await fileHandle.queryPermission(options)) === 'granted') {
+        return true;
+    }
+    // Request permission. If the user grants permission, return true.
+    if ((await fileHandle.requestPermission(options)) === 'granted') {
+        return true;
+    }
+    // The user didn't grant permission
+    return false;
+}
+
 if (fabAddFiles) {
     fabAddFiles.addEventListener('click', async () => {
         fabWrapper.classList.remove('open');
@@ -210,15 +227,11 @@ if (fabAddFiles) {
 
             for (const handle of handles) {
                 const id = 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-                // TADY JE ZMĚNA: Rovnou získáme soubor (data) a uložíme ho celý
-                const file = await handle.getFile();
-
                 const soundData = {
                     id: id,
-                    name: file.name.replace(/\.[^/.]+$/, ""),
-                    data: file, // Ukládáme samotný soubor (Blob)
-                    type: 'stored_file'
+                    name: handle.name.replace(/\.[^/.]+$/, ""), // remove extension
+                    handle: handle,
+                    type: 'file'
                 };
                 customSounds.push(soundData);
                 await saveCustomSound(soundData);
@@ -240,8 +253,12 @@ async function prepareAudioUrl(sound) {
     if (sound.type === 'default_url') {
         return sound.fileUrl; // From initial default array
     }
-    if (sound.custom && sound.data) {
-        return URL.createObjectURL(sound.data);
+    if (sound.custom) {
+        const hasPermission = await verifyPermission(sound.handle, false);
+        if (!hasPermission) return null;
+
+        const file = await sound.handle.getFile();
+        return URL.createObjectURL(file);
     }
     return sound.file; // Fallback
 }
@@ -254,12 +271,49 @@ function renderButtons() {
     const allSounds = customSounds.map(s => ({ ...s, custom: true }));
 
     allSounds.forEach(sound => {
-        const btn = document.createElement('button');
+        const btn = document.createElement('div');
         btn.className = 'sound-btn';
-        btn.textContent = sound.name;
+        btn.setAttribute('role', 'button');
+        btn.setAttribute('tabindex', '0');
         if (sound.custom) btn.classList.add('custom-sound');
 
-        // We defer Audio creation for custom sounds to handle permissions/Blobs
+        // Loop Badge (Lucide Infinity Icon)
+        const loopBadge = document.createElement('span');
+        loopBadge.className = 'tile-loop-badge';
+        loopBadge.style.display = sound.isLooped ? 'flex' : 'none';
+        loopBadge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-infinity"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4Z"/></svg>`;
+        btn.appendChild(loopBadge);
+
+        // Sound Name Text
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'sound-name';
+        nameSpan.textContent = sound.name;
+        btn.appendChild(nameSpan);
+
+        // Three Dot Options Button
+        const menuBtn = document.createElement('button');
+        menuBtn.className = 'tile-menu-btn';
+        menuBtn.setAttribute('aria-label', `Options for ${sound.name}`);
+        menuBtn.title = 'Options';
+        menuBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-more-vertical"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>`;
+
+        const handleMenuClick = (e) => {
+            if (e && e.cancelable) e.preventDefault();
+            if (e && e.stopPropagation) e.stopPropagation();
+            openBottomSheet(sound);
+        };
+
+        menuBtn.addEventListener('click', handleMenuClick);
+        menuBtn.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+        }, { passive: true });
+        menuBtn.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+
+        btn.appendChild(menuBtn);
+
+        // We defer Audio creation for custom sounds to handle permissions
         let audio = null;
         let objectUrl = null;
 
@@ -272,6 +326,11 @@ function renderButtons() {
         let lastPlayed = 0;
 
         const handleInteraction = async (e) => {
+            // Ignore click if target is tile menu button
+            if (e && e.target && e.target.closest('.tile-menu-btn')) {
+                return;
+            }
+
             // Prevent default behavior to avoid double-firing events
             if (e && e.cancelable) e.preventDefault();
 
@@ -301,13 +360,15 @@ function renderButtons() {
                     audio = new Audio(objectUrl);
                     setupAudioListeners(audio, btn, sound);
                 } else {
-                    console.error("Failed to load audio file.");
+                    console.error("Permission denied to access file.");
                     return;
                 }
             }
 
             if (!audio) return;
 
+            // Update loop property before playback
+            audio.loop = !!sound.isLooped;
 
             // Stop previously playing audios instantly
             activeAudios.forEach(oldAudio => {
@@ -390,7 +451,7 @@ function renderButtons() {
                 }
 
                 // If audio finished naturally, reset progress bar to 0 unless another audio took over
-                if (audio.ended) {
+                if (audio.ended && !audio.loop) {
                     if (activeAudios[activeAudios.length - 1] === audio) {
                         if (progressBar) progressBar.style.width = `0%`;
                         clearInterval(progressUpdateInterval);
@@ -413,10 +474,15 @@ function renderButtons() {
 }
 
 function setupAudioListeners(audio, btn, sound) {
+    audio.soundId = sound.id;
+    audio.loop = !!sound.isLooped;
+
     // Cleanup when audio finishes naturally
     audio.addEventListener('ended', () => {
-        activeAudios = activeAudios.filter(a => a !== audio);
-        if (activeAudios.length === 0) btn.classList.remove('playing');
+        if (!audio.loop) {
+            activeAudios = activeAudios.filter(a => a !== audio);
+            if (activeAudios.length === 0) btn.classList.remove('playing');
+        }
     });
 
     // If it errors (e.g., file not found), remove it too
@@ -551,6 +617,124 @@ stopBtn.addEventListener('click', () => {
     setTimeout(() => stopBtn.classList.remove('active'), 150);
 });
 
+// ==========================================
+// Bottom Sheet Menu Controller
+// ==========================================
+let currentActiveSound = null;
+
+const backdrop = document.getElementById('bottom-sheet-backdrop');
+const sheet = document.getElementById('bottom-sheet');
+const sheetSoundName = document.getElementById('sheet-sound-name');
+const sheetOptionLoop = document.getElementById('sheet-option-loop');
+const sheetLoopToggle = document.getElementById('sheet-loop-toggle');
+
+function openBottomSheet(sound) {
+    currentActiveSound = sound;
+    if (sheetSoundName) sheetSoundName.textContent = sound.name;
+    if (sheetLoopToggle) sheetLoopToggle.checked = !!sound.isLooped;
+
+    if (backdrop) {
+        backdrop.classList.add('open');
+        backdrop.setAttribute('aria-hidden', 'false');
+    }
+    if (sheet) {
+        sheet.classList.add('open');
+        sheet.setAttribute('aria-hidden', 'false');
+    }
+}
+
+function closeBottomSheet() {
+    currentActiveSound = null;
+    if (backdrop) {
+        backdrop.classList.remove('open');
+        backdrop.setAttribute('aria-hidden', 'true');
+    }
+    if (sheet) {
+        sheet.classList.remove('open');
+        sheet.setAttribute('aria-hidden', 'true');
+        sheet.style.transform = '';
+    }
+}
+
+if (backdrop) {
+    backdrop.addEventListener('click', closeBottomSheet);
+}
+
+if (sheetOptionLoop) {
+    sheetOptionLoop.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentActiveSound) return;
+
+        currentActiveSound.isLooped = !currentActiveSound.isLooped;
+        if (sheetLoopToggle) sheetLoopToggle.checked = currentActiveSound.isLooped;
+
+        // Save updated sound object to IndexedDB
+        await saveCustomSound({ ...currentActiveSound });
+
+        // Also update local customSounds memory array
+        const idx = customSounds.findIndex(s => s.id === currentActiveSound.id);
+        if (idx !== -1) {
+            customSounds[idx].isLooped = currentActiveSound.isLooped;
+        }
+
+        // Apply updated loop setting to active audios matching this sound
+        activeAudios.forEach(a => {
+            if (a.soundId === currentActiveSound.id) {
+                a.loop = !!currentActiveSound.isLooped;
+            }
+        });
+
+        // Re-render buttons to reflect loop badge status on sound tile
+        renderButtons();
+    });
+}
+
+// Keyboard ESC to close bottom sheet
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sheet && sheet.classList.contains('open')) {
+        closeBottomSheet();
+    }
+});
+
+// Drag down gesture to dismiss bottom sheet
+if (sheet) {
+    let touchStartY = 0;
+    let touchCurrentY = 0;
+    let isDraggingSheet = false;
+
+    sheet.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        touchStartY = touch.clientY;
+        isDraggingSheet = true;
+    }, { passive: true });
+
+    sheet.addEventListener('touchmove', (e) => {
+        if (!isDraggingSheet) return;
+        const touch = e.touches[0];
+        touchCurrentY = touch.clientY;
+        const deltaY = touchCurrentY - touchStartY;
+
+        if (deltaY > 0) {
+            sheet.style.transform = `translateY(${deltaY}px)`;
+            sheet.style.transition = 'none';
+        }
+    }, { passive: true });
+
+    sheet.addEventListener('touchend', () => {
+        if (!isDraggingSheet) return;
+        isDraggingSheet = false;
+        sheet.style.transition = '';
+        const deltaY = touchCurrentY - touchStartY;
+        if (deltaY > 70) {
+            closeBottomSheet();
+        } else {
+            sheet.style.transform = '';
+        }
+        touchStartY = 0;
+        touchCurrentY = 0;
+    }, { passive: true });
+}
+
 // Start app
 initDB().catch(err => {
     console.error("Failed to initialize database", err);
@@ -566,7 +750,7 @@ if ('serviceWorker' in navigator) {
         // Auto-clear old caches to ensure the new "Soundboard" updates apply immediately
         caches.keys().then(names => {
             for (let name of names) {
-                if (name !== 'soundboard-v15') {
+                if (name !== 'soundboard-v16') {
                     caches.delete(name);
                 }
             }

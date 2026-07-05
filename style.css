@@ -178,6 +178,7 @@ body {
 
 /* Buttons */
 .sound-btn {
+    position: relative;
     background-color: var(--button-bg);
     color: var(--text-color);
     border: 1px solid var(--border-color);
@@ -195,6 +196,63 @@ body {
     word-break: break-word;
     min-height: 100px;
     touch-action: manipulation;
+}
+
+/* Loop Badge on Sound Tile */
+.tile-loop-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    opacity: 0.9;
+    pointer-events: none;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.sound-btn.playing .tile-loop-badge {
+    color: var(--bg-color);
+}
+
+/* Three Dot Kebab Button on Sound Tile */
+.tile-menu-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, background-color 0.2s ease, transform 0.1s ease, color 0.2s ease;
+    z-index: 2;
+    padding: 0;
+    touch-action: manipulation;
+}
+
+.tile-menu-btn:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+html.light-theme .tile-menu-btn:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.tile-menu-btn:active {
+    transform: scale(0.9);
+}
+
+.sound-btn.playing .tile-menu-btn {
+    color: var(--bg-color);
 }
 
 /* Hover state is mostly for desktop */
@@ -372,4 +430,165 @@ body {
     100% {
         transform: rotate(1deg);
     }
+}
+
+/* ==========================================
+   Bottom Sheet Menu (Google Drive Android Style)
+   ========================================== */
+.bottom-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    z-index: 1000;
+}
+
+.bottom-sheet-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    background-color: var(--surface-color);
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    z-index: 1001;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.1, 0.9, 0.2, 1);
+    color: var(--text-color);
+    overflow: hidden;
+}
+
+.bottom-sheet.open {
+    transform: translateY(0);
+}
+
+.bottom-sheet-handle-bar {
+    width: 100%;
+    padding: 12px 0 6px 0;
+    display: flex;
+    justify-content: center;
+    cursor: grab;
+}
+
+.bottom-sheet-handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background-color: var(--text-color);
+    opacity: 0.3;
+}
+
+.bottom-sheet-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 24px 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sheet-header-icon {
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.sheet-sound-name {
+    font-size: 1.15rem;
+    font-weight: 600;
+    word-break: break-word;
+    color: var(--text-color);
+}
+
+.bottom-sheet-content {
+    padding: 8px 12px;
+}
+
+.sheet-option-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sheet-option-item:hover {
+    background-color: var(--button-hover);
+}
+
+.sheet-option-item:active {
+    background-color: var(--border-color);
+}
+
+.option-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 1.05rem;
+    font-weight: 500;
+}
+
+.option-icon {
+    color: var(--text-color);
+    opacity: 0.85;
+}
+
+/* Toggle Switch Styling */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 26px;
+    pointer-events: none;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: var(--slider-bg);
+    transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 26px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .toggle-slider {
+    background-color: var(--primary-color);
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
 }

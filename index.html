@@ -93,6 +93,42 @@
         </button>
     </div>
 
+    <!-- Bottom Sheet Menu -->
+    <div id="bottom-sheet-backdrop" class="bottom-sheet-backdrop" aria-hidden="true"></div>
+    <div id="bottom-sheet" class="bottom-sheet" aria-hidden="true" role="dialog">
+        <div class="bottom-sheet-handle-bar">
+            <div class="bottom-sheet-handle"></div>
+        </div>
+        <div class="bottom-sheet-header">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="lucide lucide-music sheet-header-icon">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+            </svg>
+            <span id="sheet-sound-name" class="sheet-sound-name">Sound Name</span>
+        </div>
+        <div class="bottom-sheet-content">
+            <div id="sheet-option-loop" class="sheet-option-item" role="button" tabindex="0">
+                <div class="option-left">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="lucide lucide-infinity option-icon">
+                        <path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4Z"/>
+                    </svg>
+                    <span class="option-label">Loop sound</span>
+                </div>
+                <div class="option-right">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="sheet-loop-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 
