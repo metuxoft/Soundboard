@@ -125,13 +125,19 @@ body {
     color: var(--bg-color);
     border: none;
     border-radius: 8px;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
     font-size: 0.9rem;
     font-weight: bold;
     cursor: pointer;
     box-shadow: var(--shadow-active);
     transition: transform 0.1s, opacity 0.2s, background-color 0.2s;
     white-space: nowrap;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+#fade-out-btn {
+    min-width: 95px;
 }
 
 .action-btn:active {
@@ -591,4 +597,22 @@ input:checked + .toggle-slider {
 
 input:checked + .toggle-slider:before {
     transform: translateX(20px);
+}
+
+/* Danger Option (Remove sound) */
+.sheet-option-item.danger-option {
+    color: #F43F5E;
+}
+
+.sheet-option-item.danger-option .option-icon {
+    color: #F43F5E;
+    opacity: 1;
+}
+
+.sheet-option-item.danger-option:hover {
+    background-color: rgba(244, 63, 94, 0.12);
+}
+
+.sheet-option-item.danger-option:active {
+    background-color: rgba(244, 63, 94, 0.22);
 }

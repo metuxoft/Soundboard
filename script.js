@@ -15,6 +15,19 @@ const stopBtn = document.getElementById('stop-btn');
 
 let currentVolume = parseFloat(volumeSlider.value);
 
+function updateFadeButtonState() {
+    if (!fadeOutBtn) return;
+    if (currentVolume < 0.5) {
+        fadeOutBtn.textContent = 'Fade In';
+        fadeOutBtn.title = 'Fade volume to 1';
+    } else {
+        fadeOutBtn.textContent = 'Fade Out';
+        fadeOutBtn.title = 'Fade volume to 0';
+    }
+}
+
+updateFadeButtonState();
+
 let fadeInterval = null;
 let fadeInInterval = null;
 let lastVolumeBeforeMute = 1;
@@ -120,6 +133,31 @@ function loadCustomSounds() {
             }
 
             customSounds = results;
+
+            // Silently auto-migrate legacy FileHandle items if permission is already granted
+            for (const sound of customSounds) {
+                if (sound.handle && !sound.audioData) {
+                    try {
+                        const perm = await sound.handle.queryPermission({ mode: 'read' });
+                        if (perm === 'granted') {
+                            const file = await sound.handle.getFile();
+                            const ab = await file.arrayBuffer();
+                            sound.audioData = ab;
+                            delete sound.handle;
+                            await saveCustomSound({
+                                id: sound.id,
+                                name: sound.name,
+                                isLooped: sound.isLooped,
+                                audioData: ab,
+                                type: 'blob'
+                            });
+                        }
+                    } catch (e) {
+                        console.warn("Background migration skipped for:", sound.name, e);
+                    }
+                }
+            }
+
             renderButtons();
             resolve();
         };
@@ -132,7 +170,20 @@ function saveCustomSound(soundData) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(['sounds'], 'readwrite');
         const store = transaction.objectStore('sounds');
-        const request = store.put(soundData);
+        
+        const cleanData = {
+            id: soundData.id,
+            name: soundData.name,
+            type: soundData.type || 'blob',
+            isLooped: !!soundData.isLooped
+        };
+        if (soundData.audioData) cleanData.audioData = soundData.audioData;
+        if (soundData.audioBlob) cleanData.audioBlob = soundData.audioBlob;
+        if (soundData.fileUrl) cleanData.fileUrl = soundData.fileUrl;
+        if (soundData.file) cleanData.file = soundData.file;
+        if (soundData.handle) cleanData.handle = soundData.handle;
+
+        const request = store.put(cleanData);
 
         request.onsuccess = () => resolve();
         request.onerror = (e) => reject(e.target.error);
@@ -197,34 +248,77 @@ async function verifyPermission(fileHandle, readWrite) {
     return false;
 }
 
-if (fabAddFiles) {
-    fabAddFiles.addEventListener('click', async () => {
-        fabWrapper.classList.remove('open');
-        if (isDeleteMode) toggleDeleteMode(false);
-        try {
-            const handles = await window.showOpenFilePicker({
-                multiple: true,
-                types: [{
-                    description: 'Audio Files',
-                    accept: { 'audio/*': ['.mp3', '.wav', '.ogg', '.m4a'] }
-                }]
-            });
-
-            for (const handle of handles) {
+function triggerFileInput() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = 'audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac';
+    input.onchange = async (e) => {
+        const files = Array.from(e.target.files);
+        for (const file of files) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
                 const id = 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 const soundData = {
                     id: id,
-                    name: handle.name.replace(/\.[^/.]+$/, ""), // remove extension
-                    handle: handle,
-                    type: 'file'
+                    name: file.name.replace(/\.[^/.]+$/, ""),
+                    audioData: arrayBuffer,
+                    type: 'blob'
                 };
                 customSounds.push(soundData);
                 await saveCustomSound(soundData);
+            } catch (err) {
+                console.error('Error reading file:', err);
+            }
+        }
+        renderButtons();
+    };
+    input.click();
+}
+
+function addMediaFiles() {
+    if ('showOpenFilePicker' in window) {
+        window.showOpenFilePicker({
+            multiple: true,
+            types: [{
+                description: 'Audio Files',
+                accept: { 'audio/*': ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'] }
+            }]
+        }).then(async (handles) => {
+            for (const handle of handles) {
+                try {
+                    const file = await handle.getFile();
+                    const arrayBuffer = await file.arrayBuffer();
+                    const id = 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    const soundData = {
+                        id: id,
+                        name: handle.name.replace(/\.[^/.]+$/, ""),
+                        audioData: arrayBuffer,
+                        type: 'blob'
+                    };
+                    customSounds.push(soundData);
+                    await saveCustomSound(soundData);
+                } catch (err) {
+                    console.error('Error processing selected file handle:', err);
+                }
             }
             renderButtons();
-        } catch (e) {
-            if (e.name !== 'AbortError') console.error('Error adding media:', e);
-        }
+        }).catch((e) => {
+            if (e.name !== 'AbortError') {
+                console.warn('showOpenFilePicker error or fallback:', e);
+                triggerFileInput();
+            }
+        });
+    } else {
+        triggerFileInput();
+    }
+}
+
+if (fabAddFiles) {
+    fabAddFiles.addEventListener('click', () => {
+        fabWrapper.classList.remove('open');
+        if (isDeleteMode) toggleDeleteMode(false);
+        addMediaFiles();
     });
 }
 
@@ -255,16 +349,41 @@ let activeSessions = []; // Stores active Web Audio playback sessions
 
 async function getSoundArrayBuffer(sound) {
     try {
+        // 1. ArrayBuffer stored directly in IndexedDB (permission prompt free!)
+        if (sound.audioData) {
+            return sound.audioData.slice(0);
+        }
+
+        // 2. Blob stored in IndexedDB
+        if (sound.audioBlob) {
+            const ab = await sound.audioBlob.arrayBuffer();
+            return ab.slice(0);
+        }
+
+        // 3. Legacy handle migration: loaded from previous FileSystemFileHandle
         if (sound.custom && sound.handle) {
             const hasPermission = await verifyPermission(sound.handle, false);
             if (!hasPermission) return null;
             const file = await sound.handle.getFile();
-            return await file.arrayBuffer();
+            const arrayBuffer = await file.arrayBuffer();
+
+            // Store binary directly into IndexedDB & remove handle so browser permission prompt never fires again
+            sound.audioData = arrayBuffer;
+            delete sound.handle;
+            await saveCustomSound({
+                id: sound.id,
+                name: sound.name,
+                isLooped: sound.isLooped,
+                audioData: arrayBuffer,
+                type: 'blob'
+            });
+
+            return arrayBuffer.slice(0);
         }
 
+        // 4. Predefined URL assets (e.g. audio/Play me.wav)
         const url = sound.fileUrl || sound.file;
         if (url) {
-            // Encode URI so spaces in paths (e.g. "audio/Play me.wav") work in Chrome fetch
             const encodedUrl = encodeURI(url);
             const res = await fetch(encodedUrl);
             if (!res.ok) {
@@ -562,6 +681,7 @@ if (volumeIcon) {
         }
 
         volumeSlider.value = currentVolume;
+        updateFadeButtonState();
 
         if (audioCtx) {
             activeSessions.forEach(s => {
@@ -578,12 +698,14 @@ if (volumeIcon) {
             clearInterval(fadeInInterval);
             fadeInInterval = null;
         }
+        updateFadeButtonState();
     });
 }
 
 // Update global volume & apply instantly to all currently playing sounds
 volumeSlider.addEventListener('input', (e) => {
     currentVolume = parseFloat(e.target.value);
+    updateFadeButtonState();
 
     // Stop fading if user manually changes slider
     if (fadeInterval) {
@@ -603,11 +725,8 @@ volumeSlider.addEventListener('input', (e) => {
     }
 });
 
-// Fade Out Logic
+// Fade In / Fade Out Logic
 fadeOutBtn.addEventListener('click', () => {
-    // Only fade if volume > 0
-    if (currentVolume <= 0) return;
-
     fadeOutBtn.disabled = true;
 
     const duration = 3000; // 3 seconds
@@ -621,13 +740,22 @@ fadeOutBtn.addEventListener('click', () => {
     if (fadeInInterval) clearInterval(fadeInInterval);
     fadeInInterval = null;
 
+    const isFadeIn = startVolume < 0.5;
+
     fadeInterval = setInterval(() => {
         currentStep++;
-        let newVol = startVolume * (1 - (currentStep / steps));
-        if (newVol < 0) newVol = 0;
+        let newVol;
+        if (isFadeIn) {
+            newVol = startVolume + (1.0 - startVolume) * (currentStep / steps);
+            if (newVol > 1) newVol = 1;
+        } else {
+            newVol = startVolume * (1 - (currentStep / steps));
+            if (newVol < 0) newVol = 0;
+        }
 
         currentVolume = newVol;
         volumeSlider.value = newVol;
+        updateFadeButtonState();
 
         if (audioCtx) {
             activeSessions.forEach(s => {
@@ -639,6 +767,7 @@ fadeOutBtn.addEventListener('click', () => {
             clearInterval(fadeInterval);
             fadeInterval = null;
             fadeOutBtn.disabled = false;
+            updateFadeButtonState();
         }
     }, intervalTime);
 });
@@ -657,6 +786,7 @@ stopBtn.addEventListener('click', () => {
     }
 
     stopAllActiveSessions();
+    updateFadeButtonState();
 
     // Give a brief visual feedback on the button
     stopBtn.classList.add('active');
@@ -673,6 +803,7 @@ const sheet = document.getElementById('bottom-sheet');
 const sheetSoundName = document.getElementById('sheet-sound-name');
 const sheetOptionLoop = document.getElementById('sheet-option-loop');
 const sheetLoopToggle = document.getElementById('sheet-loop-toggle');
+const sheetOptionDelete = document.getElementById('sheet-option-delete');
 
 function openBottomSheet(sound) {
     currentActiveSound = sound;
@@ -735,6 +866,27 @@ if (sheetOptionLoop) {
     });
 }
 
+if (sheetOptionDelete) {
+    sheetOptionDelete.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentActiveSound) return;
+        const soundId = currentActiveSound.id;
+        closeBottomSheet();
+        await deleteCustomSound(soundId);
+    });
+}
+
+[sheetOptionLoop, sheetOptionDelete].forEach(option => {
+    if (option) {
+        option.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                option.click();
+            }
+        });
+    }
+});
+
 // Keyboard ESC to close bottom sheet
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && sheet && sheet.classList.contains('open')) {
@@ -796,7 +948,7 @@ if ('serviceWorker' in navigator) {
         // Auto-clear old caches to ensure the new "Soundboard" updates apply immediately
         caches.keys().then(names => {
             for (let name of names) {
-                if (name !== 'soundboard-v19') {
+                if (name !== 'soundboard-v22') {
                     caches.delete(name);
                 }
             }
