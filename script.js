@@ -18,9 +18,6 @@ const volumeIcon = document.querySelector('.volume-icon');
 const settingsBtn = document.getElementById('settings-btn');
 const settingsBackdrop = document.getElementById('settings-sheet-backdrop');
 const settingsSheet = document.getElementById('settings-sheet');
-const settingsThemeOption = document.getElementById('settings-option-theme');
-const settingsThemeToggle = document.getElementById('settings-theme-toggle');
-const settingsThemeIcon = document.getElementById('settings-theme-icon');
 const settingsFadeOption = document.getElementById('settings-option-fade');
 const settingsFadeSelect = document.getElementById('settings-fade-select');
 
@@ -115,39 +112,8 @@ function triggerFadeIn() {
         }
     }, intervalTime);
 }
-
-// Theme Initialization
-const sunIconPath = `<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>`;
-const moonIconPath = `<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>`;
-
-function setTheme(isDark) {
-    if (isDark) {
-        document.documentElement.classList.remove('light-theme');
-        document.documentElement.classList.add('dark-theme');
-        if (settingsThemeIcon) settingsThemeIcon.innerHTML = moonIconPath;
-        if (settingsThemeToggle) settingsThemeToggle.checked = true;
-        localStorage.setItem('theme', 'dark');
-        const themeMeta = document.querySelector('meta[name="theme-color"]');
-        if (themeMeta) themeMeta.setAttribute('content', '#1E222A');
-    } else {
-        document.documentElement.classList.remove('dark-theme');
-        document.documentElement.classList.add('light-theme');
-        if (settingsThemeIcon) settingsThemeIcon.innerHTML = sunIconPath;
-        if (settingsThemeToggle) settingsThemeToggle.checked = false;
-        localStorage.setItem('theme', 'light');
-        const themeMeta = document.querySelector('meta[name="theme-color"]');
-        if (themeMeta) themeMeta.setAttribute('content', '#F0F4F8');
-    }
-}
-
-// Check local storage or system preference on load
-const savedTheme = localStorage.getItem('theme');
-if (savedTheme === 'light') {
-    setTheme(false);
-} else {
-    // Default to dark per user request
-    setTheme(true);
-}
+// Clean up any remaining theme preferences
+localStorage.removeItem('theme');
 
 let customSounds = []; // To store { name, handle } from IndexedDB
 let isDeleteMode = false;
@@ -1462,34 +1428,6 @@ if (settingsBackdrop) {
     settingsBackdrop.addEventListener('click', closeSettingsSheet);
 }
 
-if (settingsThemeOption) {
-    settingsThemeOption.addEventListener('click', (e) => {
-        if (e.target.closest('.toggle-switch')) return;
-        const checkbox = document.getElementById('settings-theme-toggle');
-        if (checkbox) {
-            checkbox.checked = !checkbox.checked;
-            setTheme(checkbox.checked);
-        }
-    });
-
-    settingsThemeOption.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            const checkbox = document.getElementById('settings-theme-toggle');
-            if (checkbox) {
-                checkbox.checked = !checkbox.checked;
-                setTheme(checkbox.checked);
-            }
-        }
-    });
-}
-
-if (settingsThemeToggle) {
-    settingsThemeToggle.addEventListener('change', (e) => {
-        setTheme(e.target.checked);
-    });
-}
-
 if (settingsFadeSelect) {
     settingsFadeSelect.addEventListener('change', (e) => {
         const val = parseFloat(e.target.value);
@@ -1572,7 +1510,7 @@ if ('serviceWorker' in navigator) {
         // Auto-clear old caches to ensure the new "Soundboard" updates apply immediately
         caches.keys().then(names => {
             for (let name of names) {
-                if (name !== 'soundboard-v0.5.1') {
+                if (name !== 'soundboard-v0.6') {
                     caches.delete(name);
                 }
             }
