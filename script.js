@@ -677,15 +677,21 @@ function renderButtons() {
             }
         });
 
-        const finishPointer = (e) => {
+        const finishPointer = async (e) => {
             if (activePointerId !== null && e.pointerId === activePointerId) {
+                const deltaX = e.clientX - pointerStartX;
+                const deltaY = e.clientY - pointerStartY;
+                const dist = Math.hypot(deltaX, deltaY);
+
                 if (isSwiping) {
                     btn.classList.remove('swiping');
                     try {
                         btn.releasePointerCapture(e.pointerId);
                     } catch (err) {}
                     saveCustomSound({ ...sound });
-                    ignoreTapUntil = Date.now() + 300;
+                } else if (dist <= 8) {
+                    // Tap gesture (no swipe drag): trigger audio play/stop toggle
+                    await handleInteraction(e);
                 }
                 activePointerId = null;
                 isSwiping = false;
@@ -693,7 +699,19 @@ function renderButtons() {
         };
 
         btn.addEventListener('pointerup', finishPointer);
-        btn.addEventListener('pointercancel', finishPointer);
+        btn.addEventListener('pointercancel', (e) => {
+            if (activePointerId !== null && e.pointerId === activePointerId) {
+                if (isSwiping) {
+                    btn.classList.remove('swiping');
+                    try {
+                        btn.releasePointerCapture(e.pointerId);
+                    } catch (err) {}
+                    saveCustomSound({ ...sound });
+                }
+                activePointerId = null;
+                isSwiping = false;
+            }
+        });
 
         // Mouse Scroll Wheel Handling for Per-Tile Volume
         let wheelDebounceTimeout = null;
@@ -731,10 +749,6 @@ function renderButtons() {
         const handleInteraction = async (e) => {
             // Ignore click if target is tile menu button
             if (e && e.target && e.target.closest('.tile-menu-btn')) {
-                return;
-            }
-
-            if (Date.now() < ignoreTapUntil || isSwiping) {
                 return;
             }
 
@@ -917,12 +931,9 @@ function renderButtons() {
             }, 50);
         };
 
-        // Fast-response mobile binding: touchstart triggers faster than a click
-        btn.addEventListener('touchstart', handleInteraction, { passive: false });
-
-        // Binding for mouse users 
-        btn.addEventListener('mousedown', (e) => {
-            if (e.pointerType !== "touch") handleInteraction(e);
+        // Prevent default click behavior to avoid duplicate execution
+        btn.addEventListener('click', (e) => {
+            if (e.cancelable) e.preventDefault();
         });
 
         grid.appendChild(btn);
