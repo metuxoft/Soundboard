@@ -1572,7 +1572,7 @@ if ('serviceWorker' in navigator) {
         // Auto-clear old caches to ensure the new "Soundboard" updates apply immediately
         caches.keys().then(names => {
             for (let name of names) {
-                if (name !== 'soundboard-v0.5.2') {
+                if (name !== 'soundboard-v0.5.1') {
                     caches.delete(name);
                 }
             }

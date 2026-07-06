@@ -1,6 +1,7 @@
 :root,
 html.dark-theme {
     /* Dark Theme (Default) */
+    color-scheme: dark;
     --bg-color: #12161F;
     --surface-color: #1A202C;
     --primary-color: #14B8A6;
@@ -21,6 +22,7 @@ html.dark-theme {
 
 html.light-theme {
     /* Light Theme */
+    color-scheme: light;
     --bg-color: #F8FAFC;
     --surface-color: #FFFFFF;
     --primary-color: #0D9488;
@@ -47,6 +49,13 @@ html.light-theme {
 
 html {
     background-color: var(--bg-color);
+    height: 100%;
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+html::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
 }
 
 body {
@@ -55,12 +64,20 @@ body {
     color: var(--text-color);
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    min-height: 100%;
+    min-height: 100dvh;
     overflow-x: hidden;
+    overflow-y: auto;
     user-select: none;
     /* Prevent text selection on quick taps */
     -webkit-tap-highlight-color: transparent;
     /* Remove default tap highlight on iOS */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+body::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
 }
 
 /* Header & Volume Slider */
