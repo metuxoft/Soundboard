@@ -1,4 +1,4 @@
-const CACHE_NAME = 'soundboard-v0.6.1';
+const CACHE_NAME = 'soundboard-v0.6';
 
 // ==========================================
 // CACHE URLS
