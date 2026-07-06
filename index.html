@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Soundboard</title>
+    <title>Soundboard 0.4</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1E222A">
@@ -41,7 +41,7 @@
             </svg>
             <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1">
             <button id="fade-out-btn" class="action-btn" title="Fade volume to 0">Fade Out</button>
-            <button id="stop-btn" class="action-btn action-btn--stop" title="Stop all sounds">Stop</button>
+            <button id="stop-btn" class="action-btn action-btn--stop" title="Stop all tracks">Stop</button>
         </div>
         <div id="progress-bar"
             style="position: absolute; bottom: 0; left: 0; height: 3px; background-color: var(--button-active); width: 0%; transition: width 0.05s linear;">
@@ -107,7 +107,7 @@
                 <circle cx="6" cy="18" r="3" />
                 <circle cx="18" cy="16" r="3" />
             </svg>
-            <span id="sheet-sound-name" class="sheet-sound-name">Sound Name</span>
+            <span id="sheet-sound-name" class="sheet-sound-name">Track Name</span>
         </div>
         <div class="bottom-sheet-content">
             <div id="sheet-option-loop" class="sheet-option-item" role="button" tabindex="0">
@@ -117,13 +117,47 @@
                         class="lucide lucide-infinity option-icon">
                         <path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4Z"/>
                     </svg>
-                    <span class="option-label">Loop sound</span>
+                    <span class="option-label">Loop track</span>
                 </div>
                 <div class="option-right">
                     <label class="toggle-switch">
                         <input type="checkbox" id="sheet-loop-toggle">
                         <span class="toggle-slider"></span>
                     </label>
+                </div>
+            </div>
+            <div id="sheet-option-additive" class="sheet-option-item" role="button" tabindex="0">
+                <div class="option-left">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="lucide lucide-layers option-icon">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                        <polyline points="2 17 12 22 22 17"/>
+                        <polyline points="2 12 12 17 22 12"/>
+                    </svg>
+                    <span class="option-label">Additive track</span>
+                </div>
+                <div class="option-right">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="sheet-additive-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div id="sheet-option-volume" class="sheet-option-item sheet-volume-item">
+                <div class="option-left">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="lucide lucide-volume-2 option-icon">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                    <span class="option-label">Track volume</span>
+                </div>
+                <div class="option-right sheet-volume-control">
+                    <input type="range" id="sheet-volume-slider" min="0" max="1" step="0.01" value="1">
+                    <span id="sheet-volume-val">100%</span>
                 </div>
             </div>
             <div id="sheet-option-delete" class="sheet-option-item danger-option" role="button" tabindex="0">
@@ -137,7 +171,7 @@
                         <line x1="10" x2="10" y1="11" y2="17"/>
                         <line x1="14" x2="14" y1="11" y2="17"/>
                     </svg>
-                    <span class="option-label">Remove sound</span>
+                    <span class="option-label">Remove track</span>
                 </div>
             </div>
         </div>

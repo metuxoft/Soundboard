@@ -1,34 +1,42 @@
 :root,
 html.dark-theme {
     /* Dark Theme (Default) */
-    --bg-color: #1E222A;
-    --surface-color: #282E38;
-    --primary-color: #20A090;
-    --text-color: #E8ECEF;
-    --button-bg: #282E38;
-    --button-hover: #363D49;
-    --button-active: #20A090;
-    --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    --shadow-active: 0 2px 4px rgba(0, 0, 0, 0.2);
-    --header-bg: rgba(30, 34, 42, 0.85);
-    --slider-bg: #4A5568;
-    --border-color: rgba(255, 255, 255, 0.05);
+    --bg-color: #12161F;
+    --surface-color: #1A202C;
+    --primary-color: #14B8A6;
+    --primary-glow: rgba(20, 184, 166, 0.35);
+    --text-color: #F8FAFC;
+    --text-muted: #94A3B8;
+    --button-bg: #1A202C;
+    --button-hover: #222A3B;
+    --button-active: #14B8A6;
+    --shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    --shadow-active: 0 2px 6px rgba(0, 0, 0, 0.25);
+    --header-bg: rgba(18, 22, 31, 0.85);
+    --slider-bg: #334155;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --fill-idle: rgba(20, 184, 166, 0.22);
+    --fill-playing: rgba(20, 184, 166, 0.45);
 }
 
 html.light-theme {
     /* Light Theme */
-    --bg-color: #F0F4F8;
+    --bg-color: #F8FAFC;
     --surface-color: #FFFFFF;
-    --primary-color: #1D8A78;
-    --text-color: #1E293B;
+    --primary-color: #0D9488;
+    --primary-glow: rgba(13, 148, 136, 0.25);
+    --text-color: #0F172A;
+    --text-muted: #64748B;
     --button-bg: #FFFFFF;
-    --button-hover: #E2E8F0;
-    --button-active: #1D8A78;
-    --shadow: 0 4px 12px rgba(30, 41, 59, 0.08);
-    --shadow-active: 0 2px 4px rgba(30, 41, 59, 0.15);
+    --button-hover: #F1F5F9;
+    --button-active: #0D9488;
+    --shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+    --shadow-active: 0 2px 6px rgba(15, 23, 42, 0.12);
     --header-bg: rgba(255, 255, 255, 0.85);
     --slider-bg: #CBD5E1;
-    --border-color: rgba(30, 41, 59, 0.1);
+    --border-color: rgba(15, 23, 42, 0.1);
+    --fill-idle: rgba(13, 148, 136, 0.18);
+    --fill-playing: rgba(13, 148, 136, 0.36);
 }
 
 * {
@@ -68,7 +76,7 @@ body {
     align-items: center;
     gap: 1rem;
     box-shadow: var(--shadow);
-    z-index: 10;
+    z-index: 1001;
 }
 
 .top-bar h1 {
@@ -182,7 +190,7 @@ body {
     }
 }
 
-/* Buttons */
+/* Buttons / Sound Tiles */
 .sound-btn {
     position: relative;
     background-color: var(--button-bg);
@@ -194,32 +202,88 @@ body {
     font-weight: 600;
     cursor: pointer;
     box-shadow: var(--shadow);
-    transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.1s ease;
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
     word-break: break-word;
     min-height: 100px;
-    touch-action: manipulation;
+    touch-action: pan-y;
+    overflow: hidden;
+    user-select: none;
 }
 
-/* Loop Badge on Sound Tile */
-.tile-loop-badge {
+/* Sound Name Text inside Tile */
+.sound-name {
+    position: relative;
+    z-index: 2;
+    pointer-events: none;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+html.dark-theme .sound-name {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* Tile Volume Fill Overlay (Google Home App Style) */
+.tile-volume-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: 0;
+    transition: width 0.05s ease-out;
+    background-color: var(--fill-idle);
+}
+
+.sound-btn.swiping .tile-volume-fill {
+    transition: none; /* Instant tracking during drag */
+}
+
+/* Volume Percentage Badge on Sound Tile */
+.tile-volume-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+
+.sound-btn.swiping .tile-volume-badge {
+    opacity: 1;
+    transform: scale(1.12);
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+/* Badges container on Sound Tile */
+.tile-badges {
     position: absolute;
     top: 10px;
     left: 10px;
     display: flex;
     align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.tile-badge {
+    display: flex;
+    align-items: center;
     justify-content: center;
     color: var(--primary-color);
     opacity: 0.9;
-    pointer-events: none;
     transition: opacity 0.2s ease, color 0.2s ease;
-}
-
-.sound-btn.playing .tile-loop-badge {
-    color: var(--bg-color);
 }
 
 /* Three Dot Kebab Button on Sound Tile */
@@ -227,8 +291,8 @@ body {
     position: absolute;
     top: 6px;
     right: 6px;
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: none;
     background: transparent;
@@ -238,8 +302,8 @@ body {
     justify-content: center;
     cursor: pointer;
     opacity: 0.7;
-    transition: opacity 0.2s ease, background-color 0.2s ease, transform 0.1s ease, color 0.2s ease;
-    z-index: 2;
+    transition: opacity 0.2s ease, background-color 0.2s ease, transform 0.1s ease;
+    z-index: 3;
     padding: 0;
     touch-action: manipulation;
 }
@@ -257,10 +321,6 @@ html.light-theme .tile-menu-btn:hover {
     transform: scale(0.9);
 }
 
-.sound-btn.playing .tile-menu-btn {
-    color: var(--bg-color);
-}
-
 /* Hover state is mostly for desktop */
 @media (hover: hover) {
     .sound-btn:hover {
@@ -272,18 +332,19 @@ html.light-theme .tile-menu-btn:hover {
 /* Visual feedback on press - active class handled by JS for better mobile behavior */
 .sound-btn:active,
 .sound-btn.active {
-    background-color: var(--button-active);
-    transform: translateY(4px);
+    background-color: var(--button-hover);
+    transform: translateY(2px);
     box-shadow: var(--shadow-active);
-    color: var(--text-color);
 }
 
 /* Continuous playing state */
 .sound-btn.playing {
-    background-color: var(--primary-color);
-    color: var(--bg-color);
-    box-shadow: 0 0 15px var(--primary-color);
     border-color: var(--primary-color);
+    box-shadow: 0 0 16px var(--primary-glow);
+}
+
+.sound-btn.playing .tile-volume-fill {
+    background-color: var(--fill-playing);
 }
 
 /* Floating Action Button */
@@ -470,7 +531,7 @@ html.light-theme .tile-menu-btn:hover {
     border-radius: 28px 28px 0 0;
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
     padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
-    z-index: 1001;
+    z-index: 1002;
     transform: translateY(100%);
     transition: transform 0.35s cubic-bezier(0.1, 0.9, 0.2, 1);
     color: var(--text-color);
@@ -599,7 +660,7 @@ input:checked + .toggle-slider:before {
     transform: translateX(20px);
 }
 
-/* Danger Option (Remove sound) */
+/* Danger Option (Remove track) */
 .sheet-option-item.danger-option {
     color: #F43F5E;
 }
@@ -615,4 +676,41 @@ input:checked + .toggle-slider:before {
 
 .sheet-option-item.danger-option:active {
     background-color: rgba(244, 63, 94, 0.22);
+}
+
+/* Bottom Sheet Volume Control */
+.sheet-volume-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#sheet-volume-slider {
+    width: 120px;
+    cursor: pointer;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--slider-bg);
+    border-radius: 3px;
+    outline: none;
+}
+
+#sheet-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
+}
+
+#sheet-volume-val {
+    font-size: 0.9rem;
+    font-weight: 600;
+    min-width: 42px;
+    text-align: right;
+    color: var(--text-color);
 }

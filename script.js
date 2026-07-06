@@ -33,6 +33,48 @@ let fadeInInterval = null;
 let lastVolumeBeforeMute = 1;
 let progressUpdateInterval = null;
 
+function triggerFadeIn() {
+    if (fadeInterval) {
+        clearInterval(fadeInterval);
+        fadeInterval = null;
+    }
+    if (fadeInInterval) {
+        clearInterval(fadeInInterval);
+        fadeInInterval = null;
+    }
+    if (fadeOutBtn) fadeOutBtn.disabled = true;
+
+    const duration = 3000; // 3 seconds
+    const intervalTime = 50;
+    const steps = duration / intervalTime;
+    let startVolume = parseFloat(volumeSlider.value);
+    let currentStep = 0;
+
+    fadeInInterval = setInterval(() => {
+        currentStep++;
+        let newVol = startVolume + (1.0 - startVolume) * (currentStep / steps);
+        if (newVol > 1) newVol = 1;
+
+        currentVolume = newVol;
+        volumeSlider.value = newVol;
+        updateFadeButtonState();
+
+        if (audioCtx) {
+            activeSessions.forEach(s => {
+                const soundVol = (s.sound && s.sound.volume !== undefined) ? s.sound.volume : 1.0;
+                s.gainNode.gain.setValueAtTime(soundVol * newVol, audioCtx.currentTime);
+            });
+        }
+
+        if (currentStep >= steps) {
+            clearInterval(fadeInInterval);
+            fadeInInterval = null;
+            if (fadeOutBtn) fadeOutBtn.disabled = false;
+            updateFadeButtonState();
+        }
+    }, intervalTime);
+}
+
 // Theme Initialization
 const themeToggleBtn = document.getElementById('theme-toggle');
 const sunIconPath = `<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>`;
@@ -175,7 +217,9 @@ function saveCustomSound(soundData) {
             id: soundData.id,
             name: soundData.name,
             type: soundData.type || 'blob',
-            isLooped: !!soundData.isLooped
+            isLooped: !!soundData.isLooped,
+            isAdditive: !!soundData.isAdditive,
+            volume: soundData.volume !== undefined ? parseFloat(soundData.volume) : 1.0
         };
         if (soundData.audioData) cleanData.audioData = soundData.audioData;
         if (soundData.audioBlob) cleanData.audioBlob = soundData.audioBlob;
@@ -460,6 +504,56 @@ function deleteCustomSound(id) {
     });
 }
 
+function updateActiveSessionsGain() {
+    if (!audioCtx) return;
+    activeSessions.forEach(s => {
+        const soundVol = (s.sound && s.sound.volume !== undefined) ? s.sound.volume : 1.0;
+        const effectiveVol = soundVol * currentVolume;
+        s.gainNode.gain.setValueAtTime(effectiveVol, audioCtx.currentTime);
+    });
+}
+
+function updateSoundVolume(sound, newVolume, shouldSave = true) {
+    sound.volume = Math.max(0, Math.min(1, Math.round(newVolume * 100) / 100));
+
+    // Find button in DOM
+    const btn = document.querySelector(`.sound-btn[data-id="${sound.id}"]`);
+    if (btn) {
+        const fill = btn.querySelector('.tile-volume-fill');
+        if (fill) fill.style.width = `${sound.volume * 100}%`;
+        const badge = btn.querySelector('.tile-volume-badge');
+        if (badge) badge.textContent = `${Math.round(sound.volume * 100)}%`;
+    }
+
+    // Update active web audio sessions gain for this sound
+    if (audioCtx) {
+        activeSessions.forEach(s => {
+            if (s.soundId === sound.id) {
+                const effectiveGain = sound.volume * currentVolume;
+                s.gainNode.gain.setValueAtTime(effectiveGain, audioCtx.currentTime);
+            }
+        });
+    }
+
+    // Update bottom sheet slider if open for this sound
+    if (currentActiveSound && currentActiveSound.id === sound.id) {
+        const sheetSlider = document.getElementById('sheet-volume-slider');
+        const sheetVal = document.getElementById('sheet-volume-val');
+        if (sheetSlider) sheetSlider.value = sound.volume;
+        if (sheetVal) sheetVal.textContent = `${Math.round(sound.volume * 100)}%`;
+    }
+
+    // Update local memory customSounds array
+    const idx = customSounds.findIndex(s => s.id === sound.id);
+    if (idx !== -1) {
+        customSounds[idx].volume = sound.volume;
+    }
+
+    if (shouldSave) {
+        saveCustomSound({ ...sound });
+    }
+}
+
 function renderButtons() {
     grid.innerHTML = ''; // Clear just in case
 
@@ -467,6 +561,8 @@ function renderButtons() {
     const allSounds = customSounds.map(s => ({ ...s, custom: true }));
 
     allSounds.forEach(sound => {
+        sound.volume = sound.volume !== undefined ? parseFloat(sound.volume) : 1.0;
+
         // Preload buffer in background
         loadAudioBuffer(sound).catch(() => {});
 
@@ -474,14 +570,40 @@ function renderButtons() {
         btn.className = 'sound-btn';
         btn.setAttribute('role', 'button');
         btn.setAttribute('tabindex', '0');
+        btn.setAttribute('data-id', sound.id);
         if (sound.custom) btn.classList.add('custom-sound');
+
+        // Volume Fill Overlay (Google Home Light Tile Style)
+        const volumeFill = document.createElement('div');
+        volumeFill.className = 'tile-volume-fill';
+        volumeFill.style.width = `${sound.volume * 100}%`;
+        btn.appendChild(volumeFill);
+
+        // Volume Percentage Badge
+        const volumeBadge = document.createElement('span');
+        volumeBadge.className = 'tile-volume-badge';
+        volumeBadge.textContent = `${Math.round(sound.volume * 100)}%`;
+        btn.appendChild(volumeBadge);
+
+        // Badges Container (Loop & Additive Icons)
+        const badgesContainer = document.createElement('div');
+        badgesContainer.className = 'tile-badges';
 
         // Loop Badge (Lucide Infinity Icon)
         const loopBadge = document.createElement('span');
-        loopBadge.className = 'tile-loop-badge';
+        loopBadge.className = 'tile-badge tile-loop-badge';
         loopBadge.style.display = sound.isLooped ? 'flex' : 'none';
         loopBadge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-infinity"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4Z"/></svg>`;
-        btn.appendChild(loopBadge);
+        badgesContainer.appendChild(loopBadge);
+
+        // Additive Badge (Lucide Layers Icon)
+        const additiveBadge = document.createElement('span');
+        additiveBadge.className = 'tile-badge tile-additive-badge';
+        additiveBadge.style.display = sound.isAdditive ? 'flex' : 'none';
+        additiveBadge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layers"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`;
+        badgesContainer.appendChild(additiveBadge);
+
+        btn.appendChild(badgesContainer);
 
         // Sound Name Text
         const nameSpan = document.createElement('span');
@@ -512,11 +634,107 @@ function renderButtons() {
 
         btn.appendChild(menuBtn);
 
+        // Swipe & Drag Gesture Handling for Per-Tile Volume
+        let pointerStartX = 0;
+        let pointerStartY = 0;
+        let isSwiping = false;
+        let activePointerId = null;
+        let tileRect = null;
+        let ignoreTapUntil = 0;
+
+        btn.addEventListener('pointerdown', (e) => {
+            if (e.target && e.target.closest('.tile-menu-btn')) return;
+            if (isDeleteMode) return;
+
+            pointerStartX = e.clientX;
+            pointerStartY = e.clientY;
+            isSwiping = false;
+            activePointerId = e.pointerId;
+            tileRect = btn.getBoundingClientRect();
+        });
+
+        btn.addEventListener('pointermove', (e) => {
+            if (activePointerId === null || e.pointerId !== activePointerId) return;
+
+            const deltaX = e.clientX - pointerStartX;
+            const deltaY = e.clientY - pointerStartY;
+
+            if (!isSwiping) {
+                if (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                    isSwiping = true;
+                    btn.classList.add('swiping');
+                    try {
+                        btn.setPointerCapture(e.pointerId);
+                    } catch (err) {}
+                }
+            }
+
+            if (isSwiping) {
+                if (e.cancelable) e.preventDefault();
+                let ratio = (e.clientX - tileRect.left) / tileRect.width;
+                ratio = Math.max(0, Math.min(1, ratio));
+                updateSoundVolume(sound, ratio, false);
+            }
+        });
+
+        const finishPointer = (e) => {
+            if (activePointerId !== null && e.pointerId === activePointerId) {
+                if (isSwiping) {
+                    btn.classList.remove('swiping');
+                    try {
+                        btn.releasePointerCapture(e.pointerId);
+                    } catch (err) {}
+                    saveCustomSound({ ...sound });
+                    ignoreTapUntil = Date.now() + 300;
+                }
+                activePointerId = null;
+                isSwiping = false;
+            }
+        };
+
+        btn.addEventListener('pointerup', finishPointer);
+        btn.addEventListener('pointercancel', finishPointer);
+
+        // Mouse Scroll Wheel Handling for Per-Tile Volume
+        let wheelDebounceTimeout = null;
+
+        btn.addEventListener('wheel', (e) => {
+            if (isDeleteMode) return;
+            if (e.cancelable) e.preventDefault();
+
+            const currentVol = sound.volume !== undefined ? sound.volume : 1.0;
+            // Scroll UP (deltaY < 0) increases volume, scroll DOWN (deltaY > 0) decreases volume
+            const step = 0.05;
+            let delta = 0;
+            if (e.deltaY < 0) {
+                delta = step;
+            } else if (e.deltaY > 0) {
+                delta = -step;
+            }
+
+            if (delta !== 0) {
+                const newVol = Math.max(0, Math.min(1, Math.round((currentVol + delta) * 100) / 100));
+
+                btn.classList.add('swiping');
+                updateSoundVolume(sound, newVol, false);
+
+                clearTimeout(wheelDebounceTimeout);
+                wheelDebounceTimeout = setTimeout(() => {
+                    btn.classList.remove('swiping');
+                    saveCustomSound({ ...sound });
+                }, 300);
+            }
+        }, { passive: false });
+
         let lastPlayed = 0;
 
         const handleInteraction = async (e) => {
             // Ignore click if target is tile menu button
             if (e && e.target && e.target.closest('.tile-menu-btn')) {
+                return;
+            }
+
+            if (Date.now() < ignoreTapUntil || isSwiping) {
                 return;
             }
 
@@ -550,13 +768,82 @@ function renderButtons() {
             btn.classList.add('active');
             setTimeout(() => btn.classList.remove('active'), 150);
 
+            // If track is already playing, stop it instead of starting over
+            const isPlaying = activeSessions.some(s => s.soundId === sound.id);
+            if (isPlaying) {
+                activeSessions.forEach(session => {
+                    if (session.soundId === sound.id) {
+                        try {
+                            session.sourceNode.stop();
+                            session.sourceNode.disconnect();
+                            session.gainNode.disconnect();
+                        } catch (e) {}
+                    }
+                });
+                activeSessions = activeSessions.filter(s => s.soundId !== sound.id);
+
+                // Update playing class state for buttons
+                document.querySelectorAll('.sound-btn').forEach(b => {
+                    const bId = b.getAttribute('data-id');
+                    const isStillActive = activeSessions.some(s => s.soundId === bId);
+                    if (!isStillActive) {
+                        b.classList.remove('playing');
+                    }
+                });
+
+                if (activeSessions.length === 0) {
+                    if (progressUpdateInterval) {
+                        clearInterval(progressUpdateInterval);
+                        progressUpdateInterval = null;
+                    }
+                    const progressBar = document.getElementById('progress-bar');
+                    if (progressBar) progressBar.style.width = '0%';
+                }
+                return;
+            }
+
             const buffer = await loadAudioBuffer(sound);
             if (!buffer) {
                 console.error("Audio buffer not available for:", sound.name);
                 return;
             }
 
-            stopAllActiveSessions();
+            if (sound.isAdditive) {
+                // Additive track: stop previous active session of THIS sound if already playing
+                activeSessions.forEach(session => {
+                    if (session.soundId === sound.id) {
+                        try {
+                            session.sourceNode.stop();
+                            session.sourceNode.disconnect();
+                            session.gainNode.disconnect();
+                        } catch (e) {}
+                    }
+                });
+                activeSessions = activeSessions.filter(s => s.soundId !== sound.id);
+            } else {
+                // Non-additive track: stop all active sessions of non-additive tracks.
+                // Additive tracks keep playing together with this track.
+                activeSessions.forEach(session => {
+                    if (!session.sound || !session.sound.isAdditive) {
+                        try {
+                            session.sourceNode.stop();
+                            session.sourceNode.disconnect();
+                            session.gainNode.disconnect();
+                        } catch (e) {}
+                        if (session.btn) session.btn.classList.remove('playing');
+                    }
+                });
+                activeSessions = activeSessions.filter(s => s.sound && s.sound.isAdditive);
+            }
+
+            // Update playing class state for buttons
+            document.querySelectorAll('.sound-btn').forEach(b => {
+                const bId = b.getAttribute('data-id');
+                const isStillActive = activeSessions.some(s => s.soundId === bId);
+                if (!isStillActive) {
+                    b.classList.remove('playing');
+                }
+            });
 
             // Cancel any ongoing global fades
             if (fadeInterval) {
@@ -573,45 +860,18 @@ function renderButtons() {
             sourceNode.buffer = buffer;
             sourceNode.loop = !!sound.isLooped;
 
+            const soundVol = sound.volume !== undefined ? sound.volume : 1.0;
+            const effectiveGain = soundVol * currentVolume;
+
             const gainNode = ctx.createGain();
-            const sliderVolume = parseFloat(volumeSlider.value);
-
-            if (sliderVolume === 0 || currentVolume === 0) {
-                currentVolume = 0;
-                gainNode.gain.setValueAtTime(0, ctx.currentTime);
-                volumeSlider.value = 0;
-
-                const duration = 3000;
-                const intervalTime = 50;
-                const steps = duration / intervalTime;
-                let currentStep = 0;
-
-                fadeInInterval = setInterval(() => {
-                    currentStep++;
-                    let newVol = currentStep / steps;
-                    if (newVol > 1) newVol = 1;
-
-                    currentVolume = newVol;
-                    volumeSlider.value = newVol;
-
-                    activeSessions.forEach(s => {
-                        s.gainNode.gain.setValueAtTime(newVol, ctx.currentTime);
-                    });
-
-                    if (currentStep >= steps) {
-                        clearInterval(fadeInInterval);
-                        fadeInInterval = null;
-                    }
-                }, intervalTime);
-            } else {
-                gainNode.gain.setValueAtTime(currentVolume, ctx.currentTime);
-            }
+            gainNode.gain.setValueAtTime(effectiveGain, ctx.currentTime);
 
             sourceNode.connect(gainNode);
             gainNode.connect(ctx.destination);
 
             const session = {
                 soundId: sound.id,
+                sound: sound,
                 sourceNode: sourceNode,
                 gainNode: gainNode,
                 buffer: buffer,
@@ -632,6 +892,11 @@ function renderButtons() {
             };
 
             sourceNode.start(0);
+
+            // Automatically run fade in function if volume is less than 50% (0.5)
+            if (currentVolume < 0.5) {
+                triggerFadeIn();
+            }
 
             // Start updating progress bar exclusively for this audio
             if (progressUpdateInterval) clearInterval(progressUpdateInterval);
@@ -683,11 +948,7 @@ if (volumeIcon) {
         volumeSlider.value = currentVolume;
         updateFadeButtonState();
 
-        if (audioCtx) {
-            activeSessions.forEach(s => {
-                s.gainNode.gain.setValueAtTime(currentVolume, audioCtx.currentTime);
-            });
-        }
+        updateActiveSessionsGain();
 
         if (fadeInterval) {
             clearInterval(fadeInterval);
@@ -718,58 +979,50 @@ volumeSlider.addEventListener('input', (e) => {
         fadeInInterval = null;
     }
 
-    if (audioCtx) {
-        activeSessions.forEach(s => {
-            s.gainNode.gain.setValueAtTime(currentVolume, audioCtx.currentTime);
-        });
-    }
+    updateActiveSessionsGain();
 });
 
 // Fade In / Fade Out Logic
 fadeOutBtn.addEventListener('click', () => {
-    fadeOutBtn.disabled = true;
-
-    const duration = 3000; // 3 seconds
-    const intervalTime = 50;
-    const steps = duration / intervalTime;
-
     let startVolume = parseFloat(volumeSlider.value);
-    let currentStep = 0;
+    if (startVolume < 0.5) {
+        triggerFadeIn();
+    } else {
+        fadeOutBtn.disabled = true;
 
-    if (fadeInterval) clearInterval(fadeInterval);
-    if (fadeInInterval) clearInterval(fadeInInterval);
-    fadeInInterval = null;
+        const duration = 3000; // 3 seconds
+        const intervalTime = 50;
+        const steps = duration / intervalTime;
+        let currentStep = 0;
 
-    const isFadeIn = startVolume < 0.5;
+        if (fadeInterval) clearInterval(fadeInterval);
+        if (fadeInInterval) clearInterval(fadeInInterval);
+        fadeInInterval = null;
 
-    fadeInterval = setInterval(() => {
-        currentStep++;
-        let newVol;
-        if (isFadeIn) {
-            newVol = startVolume + (1.0 - startVolume) * (currentStep / steps);
-            if (newVol > 1) newVol = 1;
-        } else {
-            newVol = startVolume * (1 - (currentStep / steps));
+        fadeInterval = setInterval(() => {
+            currentStep++;
+            let newVol = startVolume * (1 - (currentStep / steps));
             if (newVol < 0) newVol = 0;
-        }
 
-        currentVolume = newVol;
-        volumeSlider.value = newVol;
-        updateFadeButtonState();
-
-        if (audioCtx) {
-            activeSessions.forEach(s => {
-                s.gainNode.gain.setValueAtTime(newVol, audioCtx.currentTime);
-            });
-        }
-
-        if (currentStep >= steps) {
-            clearInterval(fadeInterval);
-            fadeInterval = null;
-            fadeOutBtn.disabled = false;
+            currentVolume = newVol;
+            volumeSlider.value = newVol;
             updateFadeButtonState();
-        }
-    }, intervalTime);
+
+            if (audioCtx) {
+                activeSessions.forEach(s => {
+                    const soundVol = (s.sound && s.sound.volume !== undefined) ? s.sound.volume : 1.0;
+                    s.gainNode.gain.setValueAtTime(soundVol * newVol, audioCtx.currentTime);
+                });
+            }
+
+            if (currentStep >= steps) {
+                clearInterval(fadeInterval);
+                fadeInterval = null;
+                fadeOutBtn.disabled = false;
+                updateFadeButtonState();
+            }
+        }, intervalTime);
+    }
 });
 
 // Stop All Sounds Logic
@@ -803,12 +1056,21 @@ const sheet = document.getElementById('bottom-sheet');
 const sheetSoundName = document.getElementById('sheet-sound-name');
 const sheetOptionLoop = document.getElementById('sheet-option-loop');
 const sheetLoopToggle = document.getElementById('sheet-loop-toggle');
+const sheetOptionAdditive = document.getElementById('sheet-option-additive');
+const sheetAdditiveToggle = document.getElementById('sheet-additive-toggle');
 const sheetOptionDelete = document.getElementById('sheet-option-delete');
+const sheetVolumeSlider = document.getElementById('sheet-volume-slider');
+const sheetVolumeVal = document.getElementById('sheet-volume-val');
 
 function openBottomSheet(sound) {
     currentActiveSound = sound;
     if (sheetSoundName) sheetSoundName.textContent = sound.name;
     if (sheetLoopToggle) sheetLoopToggle.checked = !!sound.isLooped;
+    if (sheetAdditiveToggle) sheetAdditiveToggle.checked = !!sound.isAdditive;
+
+    const trackVol = sound.volume !== undefined ? sound.volume : 1.0;
+    if (sheetVolumeSlider) sheetVolumeSlider.value = trackVol;
+    if (sheetVolumeVal) sheetVolumeVal.textContent = `${Math.round(trackVol * 100)}%`;
 
     if (backdrop) {
         backdrop.classList.add('open');
@@ -818,6 +1080,14 @@ function openBottomSheet(sound) {
         sheet.classList.add('open');
         sheet.setAttribute('aria-hidden', 'false');
     }
+}
+
+if (sheetVolumeSlider) {
+    sheetVolumeSlider.addEventListener('input', (e) => {
+        if (!currentActiveSound) return;
+        const newVol = parseFloat(e.target.value);
+        updateSoundVolume(currentActiveSound, newVol, true);
+    });
 }
 
 function closeBottomSheet() {
@@ -866,6 +1136,35 @@ if (sheetOptionLoop) {
     });
 }
 
+if (sheetOptionAdditive) {
+    sheetOptionAdditive.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentActiveSound) return;
+
+        currentActiveSound.isAdditive = !currentActiveSound.isAdditive;
+        if (sheetAdditiveToggle) sheetAdditiveToggle.checked = currentActiveSound.isAdditive;
+
+        // Save updated sound object to IndexedDB
+        await saveCustomSound({ ...currentActiveSound });
+
+        // Also update local customSounds memory array
+        const idx = customSounds.findIndex(s => s.id === currentActiveSound.id);
+        if (idx !== -1) {
+            customSounds[idx].isAdditive = currentActiveSound.isAdditive;
+        }
+
+        // Update active sessions sound property if matching
+        activeSessions.forEach(s => {
+            if (s.soundId === currentActiveSound.id && s.sound) {
+                s.sound.isAdditive = currentActiveSound.isAdditive;
+            }
+        });
+
+        // Re-render buttons to reflect additive badge status on sound tile
+        renderButtons();
+    });
+}
+
 if (sheetOptionDelete) {
     sheetOptionDelete.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -876,7 +1175,7 @@ if (sheetOptionDelete) {
     });
 }
 
-[sheetOptionLoop, sheetOptionDelete].forEach(option => {
+[sheetOptionLoop, sheetOptionAdditive, sheetOptionDelete].forEach(option => {
     if (option) {
         option.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -948,7 +1247,7 @@ if ('serviceWorker' in navigator) {
         // Auto-clear old caches to ensure the new "Soundboard" updates apply immediately
         caches.keys().then(names => {
             for (let name of names) {
-                if (name !== 'soundboard-v22') {
+                if (name !== 'soundboard-v0.4') {
                     caches.delete(name);
                 }
             }
