@@ -12,21 +12,61 @@ const grid = document.getElementById('soundboard-grid');
 const volumeSlider = document.getElementById('volume-slider');
 const fadeOutBtn = document.getElementById('fade-out-btn');
 const stopBtn = document.getElementById('stop-btn');
+const crossfadeToggleBtn = document.getElementById('crossfade-toggle-btn');
+const muteToggleBtn = document.getElementById('mute-toggle-btn');
+const volumeIcon = document.querySelector('.volume-icon');
+const settingsBtn = document.getElementById('settings-btn');
+const settingsBackdrop = document.getElementById('settings-sheet-backdrop');
+const settingsSheet = document.getElementById('settings-sheet');
+const settingsThemeOption = document.getElementById('settings-option-theme');
+const settingsThemeToggle = document.getElementById('settings-theme-toggle');
+const settingsThemeIcon = document.getElementById('settings-theme-icon');
+const settingsFadeOption = document.getElementById('settings-option-fade');
+const settingsFadeSelect = document.getElementById('settings-fade-select');
 
 let currentVolume = parseFloat(volumeSlider.value);
+let crossfadeEnabled = true;
+let fadeDuration = parseFloat(localStorage.getItem('fadeDuration')) || 3;
+
+if (settingsFadeSelect) {
+    settingsFadeSelect.value = fadeDuration.toString();
+}
+
+const fadeDecreasingIcon = `<svg class="lucide lucide-chart-no-axes-column-decreasing" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V3"/><path d="M12 21V9"/><path d="M19 21v-6"/></svg>`;
+const fadeIncreasingIcon = `<svg class="lucide lucide-chart-no-axes-column-increasing" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21v-6"/><path d="M12 21V9"/><path d="M19 21V3"/></svg>`;
 
 function updateFadeButtonState() {
     if (!fadeOutBtn) return;
     if (currentVolume < 0.5) {
-        fadeOutBtn.textContent = 'Fade In';
+        fadeOutBtn.innerHTML = fadeIncreasingIcon;
         fadeOutBtn.title = 'Fade volume to 1';
+        fadeOutBtn.setAttribute('aria-label', 'Fade volume to 1');
     } else {
-        fadeOutBtn.textContent = 'Fade Out';
+        fadeOutBtn.innerHTML = fadeDecreasingIcon;
         fadeOutBtn.title = 'Fade volume to 0';
+        fadeOutBtn.setAttribute('aria-label', 'Fade volume to 0');
+    }
+}
+
+function updateVolumeIconState() {
+    if (!volumeIcon || !muteToggleBtn) return;
+    if (currentVolume === 0) {
+        volumeIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" x2="17" y1="9" y2="15"/><line x1="17" x2="23" y1="9" y2="15"/>`;
+        muteToggleBtn.classList.add('muted');
+        muteToggleBtn.title = 'Unmute volume';
+    } else if (currentVolume < 0.5) {
+        volumeIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>`;
+        muteToggleBtn.classList.remove('muted');
+        muteToggleBtn.title = 'Mute volume';
+    } else {
+        volumeIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>`;
+        muteToggleBtn.classList.remove('muted');
+        muteToggleBtn.title = 'Mute volume';
     }
 }
 
 updateFadeButtonState();
+updateVolumeIconState();
 
 let fadeInterval = null;
 let fadeInInterval = null;
@@ -44,7 +84,7 @@ function triggerFadeIn() {
     }
     if (fadeOutBtn) fadeOutBtn.disabled = true;
 
-    const duration = 3000; // 3 seconds
+    const duration = fadeDuration * 1000;
     const intervalTime = 50;
     const steps = duration / intervalTime;
     let startVolume = parseFloat(volumeSlider.value);
@@ -58,6 +98,7 @@ function triggerFadeIn() {
         currentVolume = newVol;
         volumeSlider.value = newVol;
         updateFadeButtonState();
+        updateVolumeIconState();
 
         if (audioCtx) {
             activeSessions.forEach(s => {
@@ -76,7 +117,6 @@ function triggerFadeIn() {
 }
 
 // Theme Initialization
-const themeToggleBtn = document.getElementById('theme-toggle');
 const sunIconPath = `<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>`;
 const moonIconPath = `<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>`;
 
@@ -84,15 +124,19 @@ function setTheme(isDark) {
     if (isDark) {
         document.documentElement.classList.remove('light-theme');
         document.documentElement.classList.add('dark-theme');
-        themeToggleBtn.innerHTML = sunIconPath;
+        if (settingsThemeIcon) settingsThemeIcon.innerHTML = moonIconPath;
+        if (settingsThemeToggle) settingsThemeToggle.checked = true;
         localStorage.setItem('theme', 'dark');
-        document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1E222A');
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute('content', '#1E222A');
     } else {
         document.documentElement.classList.remove('dark-theme');
         document.documentElement.classList.add('light-theme');
-        themeToggleBtn.innerHTML = moonIconPath;
+        if (settingsThemeIcon) settingsThemeIcon.innerHTML = sunIconPath;
+        if (settingsThemeToggle) settingsThemeToggle.checked = false;
         localStorage.setItem('theme', 'light');
-        document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F0F4F8');
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute('content', '#F0F4F8');
     }
 }
 
@@ -103,13 +147,6 @@ if (savedTheme === 'light') {
 } else {
     // Default to dark per user request
     setTheme(true);
-}
-
-if (themeToggleBtn) {
-    themeToggleBtn.addEventListener('click', () => {
-        const isDark = document.documentElement.classList.contains('dark-theme');
-        setTheme(!isDark);
-    });
 }
 
 let customSounds = []; // To store { name, handle } from IndexedDB
@@ -190,6 +227,8 @@ function loadCustomSounds() {
                                 id: sound.id,
                                 name: sound.name,
                                 isLooped: sound.isLooped,
+                                isAdditive: sound.isAdditive,
+                                isSolo: sound.isSolo,
                                 audioData: ab,
                                 type: 'blob'
                             });
@@ -219,6 +258,7 @@ function saveCustomSound(soundData) {
             type: soundData.type || 'blob',
             isLooped: !!soundData.isLooped,
             isAdditive: !!soundData.isAdditive,
+            isSolo: !!soundData.isSolo,
             volume: soundData.volume !== undefined ? parseFloat(soundData.volume) : 1.0
         };
         if (soundData.audioData) cleanData.audioData = soundData.audioData;
@@ -254,6 +294,9 @@ if (fabMain) {
     // Close FAB when clicking outside
     document.addEventListener('click', (e) => {
         if (fabWrapper.classList.contains('open') && !fabWrapper.contains(e.target)) {
+            if (isDeleteMode && e.target.closest('.sound-btn')) {
+                return;
+            }
             fabWrapper.classList.remove('open');
             if (isDeleteMode) toggleDeleteMode(false);
         }
@@ -418,6 +461,8 @@ async function getSoundArrayBuffer(sound) {
                 id: sound.id,
                 name: sound.name,
                 isLooped: sound.isLooped,
+                isAdditive: sound.isAdditive,
+                isSolo: sound.isSolo,
                 audioData: arrayBuffer,
                 type: 'blob'
             });
@@ -477,6 +522,9 @@ function stopAllActiveSessions() {
             session.sourceNode.stop();
             session.sourceNode.disconnect();
             session.gainNode.disconnect();
+            if (session.crossfadeGainNode) {
+                session.crossfadeGainNode.disconnect();
+            }
         } catch (e) {}
     });
     activeSessions = [];
@@ -485,6 +533,61 @@ function stopAllActiveSessions() {
     if (progressUpdateInterval) clearInterval(progressUpdateInterval);
     const progressBar = document.getElementById('progress-bar');
     if (progressBar) progressBar.style.width = '0%';
+}
+
+function stopSessionImmediately(session) {
+    try {
+        session.sourceNode.stop();
+        session.sourceNode.disconnect();
+        session.gainNode.disconnect();
+        if (session.crossfadeGainNode) {
+            session.crossfadeGainNode.disconnect();
+        }
+    } catch (e) {}
+    if (session.btn) {
+        session.btn.classList.remove('playing');
+    }
+    activeSessions = activeSessions.filter(s => s !== session);
+}
+
+function fadeOutAndStopSession(session, duration = fadeDuration) {
+    if (session.isFadingOut) return;
+    session.isFadingOut = true;
+
+    if (session.btn) {
+        session.btn.classList.remove('playing');
+    }
+
+    const ctx = getAudioContext();
+    try {
+        const currentGainVal = session.crossfadeGainNode.gain.value;
+        session.crossfadeGainNode.gain.setValueAtTime(currentGainVal, ctx.currentTime);
+        session.crossfadeGainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
+        session.sourceNode.stop(ctx.currentTime + duration);
+    } catch (e) {
+        console.warn("Error scheduling fade out:", e);
+    }
+
+    setTimeout(() => {
+        try {
+            session.sourceNode.disconnect();
+            session.gainNode.disconnect();
+            if (session.crossfadeGainNode) {
+                session.crossfadeGainNode.disconnect();
+            }
+        } catch (e) {}
+
+        activeSessions = activeSessions.filter(s => s !== session);
+
+        if (activeSessions.length === 0) {
+            if (progressUpdateInterval) {
+                clearInterval(progressUpdateInterval);
+                progressUpdateInterval = null;
+            }
+            const progressBar = document.getElementById('progress-bar');
+            if (progressBar) progressBar.style.width = '0%';
+        }
+    }, duration * 1000);
 }
 
 function deleteCustomSound(id) {
@@ -603,6 +706,13 @@ function renderButtons() {
         additiveBadge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layers"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`;
         badgesContainer.appendChild(additiveBadge);
 
+        // Solo Badge (Lucide Step Forward Icon)
+        const soloBadge = document.createElement('span');
+        soloBadge.className = 'tile-badge tile-solo-badge';
+        soloBadge.style.display = sound.isSolo ? 'flex' : 'none';
+        soloBadge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-step-forward"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>`;
+        badgesContainer.appendChild(soloBadge);
+
         btn.appendChild(badgesContainer);
 
         // Sound Name Text
@@ -644,7 +754,6 @@ function renderButtons() {
 
         btn.addEventListener('pointerdown', (e) => {
             if (e.target && e.target.closest('.tile-menu-btn')) return;
-            if (isDeleteMode) return;
 
             pointerStartX = e.clientX;
             pointerStartY = e.clientY;
@@ -654,6 +763,7 @@ function renderButtons() {
         });
 
         btn.addEventListener('pointermove', (e) => {
+            if (isDeleteMode) return;
             if (activePointerId === null || e.pointerId !== activePointerId) return;
 
             const deltaX = e.clientX - pointerStartX;
@@ -783,29 +893,29 @@ function renderButtons() {
             setTimeout(() => btn.classList.remove('active'), 150);
 
             // If track is already playing, stop it instead of starting over
-            const isPlaying = activeSessions.some(s => s.soundId === sound.id);
+            const isPlaying = activeSessions.some(s => s.soundId === sound.id && !s.isFadingOut);
             if (isPlaying) {
                 activeSessions.forEach(session => {
-                    if (session.soundId === sound.id) {
-                        try {
-                            session.sourceNode.stop();
-                            session.sourceNode.disconnect();
-                            session.gainNode.disconnect();
-                        } catch (e) {}
+                    if (session.soundId === sound.id && !session.isFadingOut) {
+                        if (crossfadeEnabled) {
+                            fadeOutAndStopSession(session);
+                        } else {
+                            stopSessionImmediately(session);
+                        }
                     }
                 });
-                activeSessions = activeSessions.filter(s => s.soundId !== sound.id);
 
                 // Update playing class state for buttons
                 document.querySelectorAll('.sound-btn').forEach(b => {
                     const bId = b.getAttribute('data-id');
-                    const isStillActive = activeSessions.some(s => s.soundId === bId);
+                    const isStillActive = activeSessions.some(s => s.soundId === bId && !s.isFadingOut);
                     if (!isStillActive) {
                         b.classList.remove('playing');
                     }
                 });
 
-                if (activeSessions.length === 0) {
+                const activeNonFading = activeSessions.filter(s => !s.isFadingOut);
+                if (activeNonFading.length === 0) {
                     if (progressUpdateInterval) {
                         clearInterval(progressUpdateInterval);
                         progressUpdateInterval = null;
@@ -822,38 +932,46 @@ function renderButtons() {
                 return;
             }
 
-            if (sound.isAdditive) {
-                // Additive track: stop previous active session of THIS sound if already playing
+            if (sound.isSolo) {
+                // Solo track: stop all active sessions of ALL tracks, including additive ones
                 activeSessions.forEach(session => {
-                    if (session.soundId === sound.id) {
-                        try {
-                            session.sourceNode.stop();
-                            session.sourceNode.disconnect();
-                            session.gainNode.disconnect();
-                        } catch (e) {}
+                    if (!session.isFadingOut) {
+                        if (crossfadeEnabled) {
+                            fadeOutAndStopSession(session);
+                        } else {
+                            stopSessionImmediately(session);
+                        }
                     }
                 });
-                activeSessions = activeSessions.filter(s => s.soundId !== sound.id);
+            } else if (sound.isAdditive) {
+                // Additive track: stop previous active session of THIS sound if already playing
+                activeSessions.forEach(session => {
+                    if (session.soundId === sound.id && !session.isFadingOut) {
+                        if (crossfadeEnabled) {
+                            fadeOutAndStopSession(session);
+                        } else {
+                            stopSessionImmediately(session);
+                        }
+                    }
+                });
             } else {
                 // Non-additive track: stop all active sessions of non-additive tracks.
                 // Additive tracks keep playing together with this track.
                 activeSessions.forEach(session => {
-                    if (!session.sound || !session.sound.isAdditive) {
-                        try {
-                            session.sourceNode.stop();
-                            session.sourceNode.disconnect();
-                            session.gainNode.disconnect();
-                        } catch (e) {}
-                        if (session.btn) session.btn.classList.remove('playing');
+                    if ((!session.sound || !session.sound.isAdditive) && !session.isFadingOut) {
+                        if (crossfadeEnabled) {
+                            fadeOutAndStopSession(session);
+                        } else {
+                            stopSessionImmediately(session);
+                        }
                     }
                 });
-                activeSessions = activeSessions.filter(s => s.sound && s.sound.isAdditive);
             }
 
             // Update playing class state for buttons
             document.querySelectorAll('.sound-btn').forEach(b => {
                 const bId = b.getAttribute('data-id');
-                const isStillActive = activeSessions.some(s => s.soundId === bId);
+                const isStillActive = activeSessions.some(s => s.soundId === bId && !s.isFadingOut);
                 if (!isStillActive) {
                     b.classList.remove('playing');
                 }
@@ -880,14 +998,27 @@ function renderButtons() {
             const gainNode = ctx.createGain();
             gainNode.gain.setValueAtTime(effectiveGain, ctx.currentTime);
 
+            const crossfadeGainNode = ctx.createGain();
+            // Determine if we should fade in this new track. We only fade in if crossfade is enabled
+            // AND global auto fade-in is not running (to avoid conflict with global volume ramp).
+            const shouldFadeIn = crossfadeEnabled && (currentVolume >= 0.5);
+            if (shouldFadeIn) {
+                crossfadeGainNode.gain.setValueAtTime(0, ctx.currentTime);
+                crossfadeGainNode.gain.linearRampToValueAtTime(1, ctx.currentTime + fadeDuration);
+            } else {
+                crossfadeGainNode.gain.setValueAtTime(1, ctx.currentTime);
+            }
+
             sourceNode.connect(gainNode);
-            gainNode.connect(ctx.destination);
+            gainNode.connect(crossfadeGainNode);
+            crossfadeGainNode.connect(ctx.destination);
 
             const session = {
                 soundId: sound.id,
                 sound: sound,
                 sourceNode: sourceNode,
                 gainNode: gainNode,
+                crossfadeGainNode: crossfadeGainNode,
                 buffer: buffer,
                 startTime: ctx.currentTime,
                 btn: btn
@@ -899,7 +1030,8 @@ function renderButtons() {
             sourceNode.onended = () => {
                 if (!sourceNode.loop) {
                     activeSessions = activeSessions.filter(s => s !== session);
-                    if (activeSessions.length === 0) {
+                    const activeNonFading = activeSessions.filter(s => !s.isFadingOut);
+                    if (activeNonFading.length === 0) {
                         btn.classList.remove('playing');
                     }
                 }
@@ -917,8 +1049,9 @@ function renderButtons() {
             const progressBar = document.getElementById('progress-bar');
 
             progressUpdateInterval = setInterval(() => {
-                if (activeSessions.length > 0) {
-                    const active = activeSessions[activeSessions.length - 1];
+                const activeNonFading = activeSessions.filter(s => !s.isFadingOut);
+                if (activeNonFading.length > 0) {
+                    const active = activeNonFading[activeNonFading.length - 1];
                     const dur = active.buffer.duration;
                     const elapsed = ctx.currentTime - active.startTime;
                     const currentProgress = (elapsed % dur) / dur;
@@ -940,24 +1073,35 @@ function renderButtons() {
     });
 }
 
+// Crossfade Toggle Listener
+if (crossfadeToggleBtn) {
+    crossfadeToggleBtn.addEventListener('click', () => {
+        crossfadeEnabled = !crossfadeEnabled;
+        if (crossfadeEnabled) {
+            crossfadeToggleBtn.classList.add('active');
+            crossfadeToggleBtn.title = 'Disable crossfade';
+        } else {
+            crossfadeToggleBtn.classList.remove('active');
+            crossfadeToggleBtn.title = 'Enable crossfade';
+        }
+    });
+}
+
 // Tap Icon to toggle volume between 0 and previous volume (or 1)
-const volumeIcon = document.querySelector('.volume-icon');
-if (volumeIcon) {
-    volumeIcon.style.cursor = 'pointer';
-    volumeIcon.addEventListener('click', () => {
+if (muteToggleBtn) {
+    muteToggleBtn.addEventListener('click', () => {
         const isMuted = currentVolume === 0;
 
         if (isMuted) {
             currentVolume = lastVolumeBeforeMute > 0 ? lastVolumeBeforeMute : 1;
-            volumeIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>`;
         } else {
             lastVolumeBeforeMute = currentVolume;
             currentVolume = 0;
-            volumeIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" x2="17" y1="9" y2="15"/><line x1="17" x2="23" y1="9" y2="15"/>`;
         }
 
         volumeSlider.value = currentVolume;
         updateFadeButtonState();
+        updateVolumeIconState();
 
         updateActiveSessionsGain();
 
@@ -978,6 +1122,7 @@ if (volumeIcon) {
 volumeSlider.addEventListener('input', (e) => {
     currentVolume = parseFloat(e.target.value);
     updateFadeButtonState();
+    updateVolumeIconState();
 
     // Stop fading if user manually changes slider
     if (fadeInterval) {
@@ -1001,7 +1146,7 @@ fadeOutBtn.addEventListener('click', () => {
     } else {
         fadeOutBtn.disabled = true;
 
-        const duration = 3000; // 3 seconds
+        const duration = fadeDuration * 1000;
         const intervalTime = 50;
         const steps = duration / intervalTime;
         let currentStep = 0;
@@ -1018,6 +1163,7 @@ fadeOutBtn.addEventListener('click', () => {
             currentVolume = newVol;
             volumeSlider.value = newVol;
             updateFadeButtonState();
+            updateVolumeIconState();
 
             if (audioCtx) {
                 activeSessions.forEach(s => {
@@ -1069,15 +1215,19 @@ const sheetOptionLoop = document.getElementById('sheet-option-loop');
 const sheetLoopToggle = document.getElementById('sheet-loop-toggle');
 const sheetOptionAdditive = document.getElementById('sheet-option-additive');
 const sheetAdditiveToggle = document.getElementById('sheet-additive-toggle');
+const sheetOptionSolo = document.getElementById('sheet-option-solo');
+const sheetSoloToggle = document.getElementById('sheet-solo-toggle');
 const sheetOptionDelete = document.getElementById('sheet-option-delete');
 const sheetVolumeSlider = document.getElementById('sheet-volume-slider');
 const sheetVolumeVal = document.getElementById('sheet-volume-val');
 
 function openBottomSheet(sound) {
+    closeSettingsSheet();
     currentActiveSound = sound;
     if (sheetSoundName) sheetSoundName.textContent = sound.name;
     if (sheetLoopToggle) sheetLoopToggle.checked = !!sound.isLooped;
     if (sheetAdditiveToggle) sheetAdditiveToggle.checked = !!sound.isAdditive;
+    if (sheetSoloToggle) sheetSoloToggle.checked = !!sound.isSolo;
 
     const trackVol = sound.volume !== undefined ? sound.volume : 1.0;
     if (sheetVolumeSlider) sheetVolumeSlider.value = trackVol;
@@ -1176,6 +1326,35 @@ if (sheetOptionAdditive) {
     });
 }
 
+if (sheetOptionSolo) {
+    sheetOptionSolo.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentActiveSound) return;
+
+        currentActiveSound.isSolo = !currentActiveSound.isSolo;
+        if (sheetSoloToggle) sheetSoloToggle.checked = currentActiveSound.isSolo;
+
+        // Save updated sound object to IndexedDB
+        await saveCustomSound({ ...currentActiveSound });
+
+        // Also update local customSounds memory array
+        const idx = customSounds.findIndex(s => s.id === currentActiveSound.id);
+        if (idx !== -1) {
+            customSounds[idx].isSolo = currentActiveSound.isSolo;
+        }
+
+        // Update active sessions sound property if matching
+        activeSessions.forEach(s => {
+            if (s.soundId === currentActiveSound.id && s.sound) {
+                s.sound.isSolo = currentActiveSound.isSolo;
+            }
+        });
+
+        // Re-render buttons to reflect solo badge status on sound tile
+        renderButtons();
+    });
+}
+
 if (sheetOptionDelete) {
     sheetOptionDelete.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -1186,7 +1365,7 @@ if (sheetOptionDelete) {
     });
 }
 
-[sheetOptionLoop, sheetOptionAdditive, sheetOptionDelete].forEach(option => {
+[sheetOptionLoop, sheetOptionAdditive, sheetOptionSolo, sheetOptionDelete].forEach(option => {
     if (option) {
         option.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -1197,10 +1376,15 @@ if (sheetOptionDelete) {
     }
 });
 
-// Keyboard ESC to close bottom sheet
+// Keyboard ESC to close bottom sheets
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && sheet && sheet.classList.contains('open')) {
-        closeBottomSheet();
+    if (e.key === 'Escape') {
+        if (sheet && sheet.classList.contains('open')) {
+            closeBottomSheet();
+        }
+        if (settingsSheet && settingsSheet.classList.contains('open')) {
+            closeSettingsSheet();
+        }
     }
 });
 
@@ -1243,6 +1427,136 @@ if (sheet) {
     }, { passive: true });
 }
 
+// ==========================================
+// Settings Sheet Menu Controller
+// ==========================================
+function openSettingsSheet() {
+    closeBottomSheet();
+    if (settingsBackdrop) {
+        settingsBackdrop.classList.add('open');
+        settingsBackdrop.setAttribute('aria-hidden', 'false');
+    }
+    if (settingsSheet) {
+        settingsSheet.classList.add('open');
+        settingsSheet.setAttribute('aria-hidden', 'false');
+    }
+}
+
+function closeSettingsSheet() {
+    if (settingsBackdrop) {
+        settingsBackdrop.classList.remove('open');
+        settingsBackdrop.setAttribute('aria-hidden', 'true');
+    }
+    if (settingsSheet) {
+        settingsSheet.classList.remove('open');
+        settingsSheet.setAttribute('aria-hidden', 'true');
+        settingsSheet.style.transform = '';
+    }
+}
+
+if (settingsBtn) {
+    settingsBtn.addEventListener('click', openSettingsSheet);
+}
+
+if (settingsBackdrop) {
+    settingsBackdrop.addEventListener('click', closeSettingsSheet);
+}
+
+if (settingsThemeOption) {
+    settingsThemeOption.addEventListener('click', (e) => {
+        if (e.target.closest('.toggle-switch')) return;
+        const checkbox = document.getElementById('settings-theme-toggle');
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            setTheme(checkbox.checked);
+        }
+    });
+
+    settingsThemeOption.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const checkbox = document.getElementById('settings-theme-toggle');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                setTheme(checkbox.checked);
+            }
+        }
+    });
+}
+
+if (settingsThemeToggle) {
+    settingsThemeToggle.addEventListener('change', (e) => {
+        setTheme(e.target.checked);
+    });
+}
+
+if (settingsFadeSelect) {
+    settingsFadeSelect.addEventListener('change', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val > 0) {
+            fadeDuration = val;
+            localStorage.setItem('fadeDuration', val.toString());
+        }
+    });
+}
+
+if (settingsFadeOption) {
+    settingsFadeOption.addEventListener('click', (e) => {
+        if (e.target.closest('#settings-fade-select')) return;
+        if (settingsFadeSelect) {
+            settingsFadeSelect.focus();
+        }
+    });
+
+    settingsFadeOption.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (settingsFadeSelect) {
+                settingsFadeSelect.focus();
+            }
+        }
+    });
+}
+
+// Drag down gesture to dismiss settings sheet
+if (settingsSheet) {
+    let settingsTouchStartY = 0;
+    let settingsTouchCurrentY = 0;
+    let isDraggingSettingsSheet = false;
+
+    settingsSheet.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        settingsTouchStartY = touch.clientY;
+        isDraggingSettingsSheet = true;
+    }, { passive: true });
+
+    settingsSheet.addEventListener('touchmove', (e) => {
+        if (!isDraggingSettingsSheet) return;
+        const touch = e.touches[0];
+        settingsTouchCurrentY = touch.clientY;
+        const deltaY = settingsTouchCurrentY - settingsTouchStartY;
+
+        if (deltaY > 0) {
+            settingsSheet.style.transform = `translateY(${deltaY}px)`;
+            settingsSheet.style.transition = 'none';
+        }
+    }, { passive: true });
+
+    settingsSheet.addEventListener('touchend', () => {
+        if (!isDraggingSettingsSheet) return;
+        isDraggingSettingsSheet = false;
+        settingsSheet.style.transition = '';
+        const deltaY = settingsTouchCurrentY - settingsTouchStartY;
+        if (deltaY > 70) {
+            closeSettingsSheet();
+        } else {
+            settingsSheet.style.transform = '';
+        }
+        settingsTouchStartY = 0;
+        settingsTouchCurrentY = 0;
+    }, { passive: true });
+}
+
 // Start app
 initDB().catch(err => {
     console.error("Failed to initialize database", err);
@@ -1258,7 +1572,7 @@ if ('serviceWorker' in navigator) {
         // Auto-clear old caches to ensure the new "Soundboard" updates apply immediately
         caches.keys().then(names => {
             for (let name of names) {
-                if (name !== 'soundboard-v0.4.1') {
+                if (name !== 'soundboard-v0.5.2') {
                     caches.delete(name);
                 }
             }

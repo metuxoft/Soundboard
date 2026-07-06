@@ -72,18 +72,10 @@ body {
     -webkit-backdrop-filter: blur(10px);
     padding: 1.2rem;
     display: flex;
-    flex-direction: column;
+    justify-content: center;
     align-items: center;
-    gap: 1rem;
     box-shadow: var(--shadow);
     z-index: 1001;
-}
-
-.top-bar h1 {
-    font-size: 1.4rem;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    color: var(--text-color);
 }
 
 .volume-control {
@@ -128,38 +120,65 @@ body {
     transform: scale(1.1);
 }
 
-.action-btn {
-    background-color: var(--primary-color);
-    color: var(--bg-color);
-    border: none;
-    border-radius: 8px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.9rem;
-    font-weight: bold;
+#volume-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary-color);
     cursor: pointer;
-    box-shadow: var(--shadow-active);
-    transition: transform 0.1s, opacity 0.2s, background-color 0.2s;
-    white-space: nowrap;
-    text-align: center;
+    border: none;
+    box-shadow: 0 0 8px rgba(11, 43, 16, 0.4);
+    transition: transform 0.1s;
+}
+
+#volume-slider::-moz-range-thumb:active {
+    transform: scale(1.1);
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-color);
+    opacity: 0.8;
+    transition: opacity 0.2s, color 0.2s, transform 0.1s, background-color 0.2s;
+    border-radius: 50%;
     flex-shrink: 0;
 }
 
-#fade-out-btn {
-    min-width: 95px;
+.icon-btn:hover {
+    transform: scale(1.1);
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
-.action-btn:active {
-    transform: scale(0.95);
+html.light-theme .icon-btn:hover {
+    background-color: rgba(0, 0, 0, 0.06);
 }
 
-.action-btn:disabled {
-    opacity: 0.5;
+.icon-btn:active {
+    transform: scale(0.9);
+}
+
+.icon-btn:disabled {
+    opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
 }
 
-.action-btn--stop {
-    background-color: #F43F5E;
-    color: white;
+.icon-btn--stop {
+    color: #F43F5E;
+}
+
+.icon-btn--stop:hover {
+    background-color: rgba(244, 63, 94, 0.08);
+}
+
+html.light-theme .icon-btn--stop:hover {
+    background-color: rgba(244, 63, 94, 0.06);
 }
 
 /* Soundboard Grid */
@@ -489,6 +508,10 @@ html.light-theme .tile-menu-btn:hover {
     animation: shake 0.4s ease-in-out infinite alternate;
 }
 
+.soundboard-grid.delete-mode .sound-btn .tile-menu-btn {
+    pointer-events: none;
+}
+
 @keyframes shake {
     0% {
         transform: rotate(-1deg);
@@ -713,4 +736,101 @@ input:checked + .toggle-slider:before {
     min-width: 42px;
     text-align: right;
     color: var(--text-color);
+}
+
+/* Icon Toggle Buttons */
+.icon-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-color);
+    opacity: 0.8;
+    transition: opacity 0.2s, color 0.2s, transform 0.1s, background-color 0.2s;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+#crossfade-toggle-btn {
+    opacity: 0.5;
+}
+
+#crossfade-toggle-btn.active {
+    opacity: 1;
+    color: var(--primary-color);
+}
+
+/* Only crossfade has hover state */
+#crossfade-toggle-btn:hover {
+    transform: scale(1.1);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+html.light-theme #crossfade-toggle-btn:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
+#crossfade-toggle-btn:active {
+    transform: scale(0.9);
+}
+
+/* Mute Toggle Button - Static on Hover */
+#mute-toggle-btn {
+    opacity: 0.8;
+}
+
+#mute-toggle-btn.muted {
+    opacity: 0.4;
+}
+
+#mute-toggle-btn:active {
+    transform: scale(0.9);
+}
+
+/* Settings Option Select */
+.option-select {
+    background-color: var(--button-hover);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 36px 8px 14px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23F8FAFC' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 14px;
+}
+
+html.light-theme .option-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230F172A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+.option-select:hover {
+    background-color: var(--border-color);
+}
+
+.option-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+/* Explicitly style option elements so they don't inherit light text colors on light background */
+.option-select option {
+    background-color: var(--surface-color);
+    color: var(--text-color);
+}
+
+/* Prevent double hover trigger styles when interacting with child element */
+.sheet-option-item:has(.option-select:hover) {
+    background-color: transparent !important;
 }
