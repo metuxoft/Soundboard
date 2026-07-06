@@ -1,7 +1,7 @@
 {
   "name": "Soundboard",
   "short_name": "Soundboard",
-  "version": "0.4",
+  "version": "0.4.1",
   "description": "A modern, lightweight custom soundboard offline PWA.",
   "start_url": "index.html",
   "display": "standalone",
